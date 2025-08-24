@@ -1,41 +1,82 @@
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>3GF – Mobil v7.7</title>
-  <style>
-    body { font-family: system-ui, sans-serif; background: #0e1117; color: #e7ebf4; margin: 0; padding: 10px; }
-    h1 { font-size: 1.2rem; }
-    .panel { background: #151a23; border: 1px solid #283043; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
-    label { display: block; margin-top: 8px; font-size: 0.9rem; }
-    input, select, button { width: 100%; padding: 10px; margin-top: 4px; border-radius: 8px; border: 1px solid #283043;
-      background: #10141d; color: #e7ebf4; font-size: 1rem; }
-    button { cursor: pointer; font-weight: bold; }
-    .btn-primary { background: #1e2a44; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .row > div { flex: 1; min-width: 120px; }
-    .active-badge { font-weight: bold; background: #1e2a44; padding: 6px 10px; border-radius: 8px; margin-bottom: 10px; display: inline-block; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border-bottom: 1px solid #283043; padding: 6px; text-align: left; }
-    th { background: #10141d; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>3GF – Tävlingsapp v7.9</title>
+<style>
+  :root{ --bg:#0e1117; --panel:#151a23; --panel2:#10141d; --border:#283043; --ink:#e7ebf4; --muted:#a5b0c4; }
+  body{ font-family:system-ui, sans-serif; background:var(--bg); color:var(--ink); margin:0; padding:10px; }
+  h1{ font-size:1.2rem; margin:0 0 8px; }
+  .tabs{ display:flex; gap:8px; margin-bottom:10px; }
+  .tab{ padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--panel2); cursor:pointer; }
+  .tab.active{ background:#1e2a44; font-weight:700; }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; }
+  label{ display:block; margin-top:8px; font-size:.95rem; }
+  input, select, button{ width:100%; padding:10px; margin-top:4px; border-radius:8px; border:1px solid var(--border); background:var(--panel2); color:var(--ink); font-size:1rem; }
+  button{ cursor:pointer; font-weight:700; }
+  .btn-primary{ background:#1e2a44; }
+  .row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .row > div{ flex:1; min-width:140px; }
+  .active-badge{ font-weight:700; background:#1e2a44; padding:6px 10px; border-radius:8px; margin-bottom:10px; display:inline-block; }
+  table{ width:100%; border-collapse:collapse; margin-top:10px; }
+  th,td{ border-bottom:1px solid var(--border); padding:6px; text-align:left; }
+  th{ background:var(--panel2); }
+  .hidden{ display:none !important; }
+  .meta{ color:var(--muted); font-size:.9rem; }
+  .lapItem{ border:1px dashed var(--border); border-radius:8px; padding:8px; margin:6px 0; background:var(--panel2); }
+  .lapActions{ display:flex; gap:6px; }
+</style>
 </head>
 <body>
-  <h1>3GF – Mobil v7.7</h1>
+<h1>3GF – Tävlingsapp v7.9</h1>
 
+<div class="tabs">
+  <div class="tab active" id="tabStart">Start</div>
+  <div class="tab" id="tabComp">Tävling</div>
+</div>
+
+<!-- START -->
+<div id="viewStart">
+  <div class="panel">
+    <h3>Grundinställningar</h3>
+    <div class="row">
+      <div><label>Miss-straff Pistol (s)</label><input id="penP" type="number" step="0.01" value="2"></div>
+      <div><label>Miss-straff Hagel (s)</label><input id="penH" type="number" step="0.01" value="2"></div>
+      <div><label>Miss-straff Karbin (s)</label><input id="penG" type="number" step="0.01" value="2"></div>
+    </div>
+    <div class="row">
+      <div><label>Tävlingsnamn</label><input id="evName" type="text" placeholder="t.ex. Sätila 3GF Cup"></div>
+      <div><label>Datum</label><input id="evDate" type="date"></div>
+      <div><label>Plats</label><input id="evPlace" type="text" placeholder="t.ex. Sätila"></div>
+    </div>
+    <div class="row">
+      <button id="saveSettings" class="btn-primary">Spara inställningar</button>
+    </div>
+    <div class="meta" id="settingsSavedMsg"></div>
+  </div>
+
+  <div class="panel">
+    <h3>Server (valfritt)</h3>
+    <p class="meta">Om du vill spara i DB via ditt API (se <code>/api/event.js</code>), skriv ett unikt Event-ID (t.ex. <em>satila-2025-09-14</em>).</p>
+    <div class="row">
+      <div><label>Event-ID</label><input id="eventId" type="text" placeholder="satila-2025-09-14"></div>
+    </div>
+    <div class="row">
+      <button id="btnLoadServer" class="">Ladda från server</button>
+      <button id="btnSaveServer" class="btn-primary">Spara till server</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMPETITION -->
+<div id="viewComp" class="hidden">
   <div class="panel">
     <h3>Lägg till deltagare</h3>
     <div class="row">
       <div><label>Namn</label><input id="name" type="text" /></div>
       <div><label>Klubb</label><input id="club" type="text" /></div>
       <div><label>Klass</label><input id="klass" type="text" /></div>
-    </div>
-    <div class="row">
-      <div><label>Använder PT?</label>
-        <select id="hasPT"><option value="no">Nej</option><option value="yes">Ja</option></select>
-      </div>
-      <div><label>PT totalt (sek)</label><input id="ptTotal" type="number" step="0.01" /></div>
     </div>
     <button id="addParticipant" class="btn-primary">Lägg till</button>
   </div>
@@ -57,9 +98,13 @@
       <div><label>Karbin tid</label><input id="tG" type="number" step="0.01" /></div>
       <div><label>Miss K</label><input id="mG" type="number" /></div>
     </div>
-    <div><label>PT detta varv</label><input id="ptLap" type="number" step="0.01" /></div>
+    <div><label>PT detta varv (sek, minus)</label><input id="ptLap" type="number" step="0.01" /></div>
 
-    <button id="saveLap" class="btn-primary">Spara varv</button>
+    <div class="row">
+      <button id="saveLap" class="btn-primary">Spara varv</button>
+    </div>
+
+    <div id="lapsList"></div>
   </div>
 
   <div class="panel">
@@ -70,28 +115,40 @@
     </div>
     <div id="resultsContainer"></div>
   </div>
+</div>
 
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const state = { people:[], activeIndex:-1 };
-  const mp=2,mh=2,mg=2; // miss-straff per gren
+  const s = {
+    settings:{penP:2,penH:2,penG:2, evName:"", evDate:"", evPlace:""},
+    eventId:"",
+    people:[],  // {id,name,club,klass,laps:[{tP,mP,tH,mH,tG,mG,pt}], sum:{}}
+    activeIndex:-1
+  };
 
-  function to2(x){ return (Math.round(x*100)/100).toFixed(2); }
+  // Tabs
+  const showStart=()=>{ tab("Start"); $("viewStart").classList.remove("hidden"); $("viewComp").classList.add("hidden"); };
+  const showComp =()=>{ tab("Comp");  $("viewComp").classList.remove("hidden");  $("viewStart").classList.add("hidden"); };
+  function tab(which){
+    $("tabStart").classList.toggle("active", which==="Start");
+    $("tabComp").classList.toggle("active", which==="Comp");
+  }
+  $("tabStart").addEventListener("click", showStart);
+  $("tabComp").addEventListener("click", showComp);
 
+  // Helpers
+  const to2 = x => (Math.round(x*100)/100).toFixed(2);
   function recalc(p){
     let dtP=0,dtH=0,dtG=0,pt=0;
-    p.laps.forEach(s=>{
-      dtP+=s.tP+s.mP*mp;
-      dtH+=s.tH+s.mH*mh;
-      dtG+=s.tG+s.mG*mg;
-      pt += s.pt;
-    });
-    const ptTot=(p.hasPT? p.ptTotal:0)+pt;
-    const tt = dtP+dtH+dtG-ptTot;
-    p.sum={dtP,dtH,dtG,pt:ptTot,tt};
+    for(const v of p.laps){
+      dtP += (v.tP||0) + (v.mP||0)*s.settings.penP;
+      dtH += (v.tH||0) + (v.mH||0)*s.settings.penH;
+      dtG += (v.tG||0) + (v.mG||0)*s.settings.penG;
+      pt  += (v.pt||0);
+    }
+    p.sum = { dtP, dtH, dtG, pt, tt: dtP+dtH+dtG-pt };
   }
-
   function sortPeople(list){
     list.forEach(recalc);
     list.sort((a,b)=>{
@@ -103,120 +160,231 @@
     });
   }
 
-  function render(){
-    const cont=$("resultsContainer");
-    cont.innerHTML="";
-    if(!state.people.length) return;
+  // Settings
+  function saveSettings(){
+    s.settings.penP = Number($("penP").value)||0;
+    s.settings.penH = Number($("penH").value)||0;
+    s.settings.penG = Number($("penG").value)||0;
+    s.settings.evName = $("evName").value.trim();
+    s.settings.evDate = $("evDate").value;
+    s.settings.evPlace= $("evPlace").value.trim();
+    s.eventId = $("eventId").value.trim();
+    persist();
+    $("settingsSavedMsg").textContent="Sparat.";
+    setTimeout(()=>$("settingsSavedMsg").textContent="",1200);
+  }
+  $("saveSettings").addEventListener("click", saveSettings);
 
-    // Totaltabell
-    const list=state.people.slice(); sortPeople(list);
-    let html="<h4>Totalresultat</h4><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th></tr></thead><tbody>";
-    list.forEach((p,i)=>{
-      html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td><td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td><td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`;
+  // Participants
+  $("addParticipant").addEventListener("click", ()=>{
+    const name = $("name").value.trim(); if(!name) return;
+    const p = { id: crypto.randomUUID(), name, club:$("club").value.trim(), klass:$("klass").value.trim(), laps:[], sum:{} };
+    s.people.push(p);
+    s.activeIndex = s.people.length-1;
+    ["name","club","klass"].forEach(id=>$(id).value="");
+    refreshActive();
+    render(); persist();
+  });
+
+  $("active").addEventListener("change", ()=>{
+    s.activeIndex = parseInt($("active").value,10);
+    render();
+  });
+
+  // Laps: save / list / edit / delete
+  $("saveLap").addEventListener("click", ()=>{
+    if(s.activeIndex<0) return;
+    const v = {
+      tP:Number($("tP").value)||0, mP:Number($("mP").value)||0,
+      tH:Number($("tH").value)||0, mH:Number($("mH").value)||0,
+      tG:Number($("tG").value)||0, mG:Number($("mG").value)||0,
+      pt:Number($("ptLap").value)||0
+    };
+    if(Object.values(v).every(x=>x===0)) return; // skydd mot dubbeltryck
+    s.people[s.activeIndex].laps.push(v);
+    ["tP","mP","tH","mH","tG","mG","ptLap"].forEach(id=>$(id).value="");
+    render(); persist();
+  });
+
+  function renderLapList(){
+    const box = $("lapsList");
+    box.innerHTML="";
+    const p = s.people[s.activeIndex];
+    if(!p){ $("activeBadge").textContent="Ingen vald"; return; }
+    $("activeBadge").textContent="Aktiv: " + p.name;
+    p.laps.forEach((v,i)=>{
+      const dtP = (v.tP||0)+(v.mP||0)*s.settings.penP;
+      const dtH = (v.tH||0)+(v.mH||0)*s.settings.penH;
+      const dtG = (v.tG||0)+(v.mG||0)*s.settings.penG;
+      const tt  = dtP+dtH+dtG-(v.pt||0);
+      const div = document.createElement("div");
+      div.className="lapItem";
+      div.innerHTML = `
+        <div><b>Varv ${i+1}</b> – P: ${to2(dtP)} H: ${to2(dtH)} K: ${to2(dtG)} | PT: ${to2(v.pt||0)} | TT: <b>${to2(tt)}</b></div>
+        <div class="lapActions">
+          <button data-edit="${i}">Redigera</button>
+          <button data-del="${i}">Ta bort</button>
+        </div>
+      `;
+      div.querySelector('[data-edit]').addEventListener('click', ()=>{
+        $("tP").value=v.tP||0; $("mP").value=v.mP||0;
+        $("tH").value=v.tH||0; $("mH").value=v.mH||0;
+        $("tG").value=v.tG||0; $("mG").value=v.mG||0;
+        $("ptLap").value=v.pt||0;
+        // På nästa sparning: skriv över just detta varv (inte lägga till):
+        const handler = ()=>{
+          const nv={ tP:Number($("tP").value)||0, mP:Number($("mP").value)||0,
+                     tH:Number($("tH").value)||0, mH:Number($("mH").value)||0,
+                     tG:Number($("tG").value)||0, mG:Number($("mG").value)||0,
+                     pt:Number($("ptLap").value)||0 };
+          if(Object.values(nv).every(x=>x===0)) { cleanup(); return; }
+          p.laps[i]=nv; ["tP","mP","tH","mH","tG","mG","ptLap"].forEach(id=>$(id).value="");
+          cleanup(); render(); persist();
+        };
+        const cleanup=()=>{
+          $("saveLap").removeEventListener("click", handler);
+          $("saveLap").textContent="Spara varv";
+        };
+        cleanup();
+        $("saveLap").addEventListener("click", handler);
+        $("saveLap").textContent="Spara ändring";
+      });
+      div.querySelector('[data-del]').addEventListener('click', ()=>{
+        p.laps.splice(i,1); render(); persist();
+      });
+      box.appendChild(div);
     });
+  }
+
+  function render(){
+    refreshActive();
+    renderLapList();
+
+    const cont = $("resultsContainer");
+    cont.innerHTML="";
+    if(!s.people.length){
+      cont.innerHTML='<div class="meta">Inga deltagare ännu.</div>';
+      return;
+    }
+    // total
+    const list = s.people.slice(); sortPeople(list);
+    let html = "<h4>Totalresultat</h4><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th></tr></thead><tbody>";
+    list.forEach((p,i)=>{ html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td><td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td><td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`; });
     html+="</tbody></table>";
 
-    // Per varv
-    const maxLaps=Math.max(...state.people.map(p=>p.laps.length));
+    // per-lap
+    const maxLaps = Math.max(...s.people.map(p=>p.laps.length));
     for(let v=0; v<maxLaps; v++){
-      const lapList=state.people.filter(p=>p.laps[v]).map(p=>{
-        const s=p.laps[v];
-        const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg, tt=dtP+dtH+dtG-(s.pt||0);
-        return {name:p.name,klass:p.klass||"",dtP,dtH,dtG,pt:s.pt||0,tt};
-      });
-      lapList.sort((a,b)=>{
+      const lapList = s.people.filter(p=>p.laps[v]).map(p=>{
+        const x=p.laps[v];
+        const dtP=(x.tP||0)+(x.mP||0)*s.settings.penP;
+        const dtH=(x.tH||0)+(x.mH||0)*s.settings.penH;
+        const dtG=(x.tG||0)+(x.mG||0)*s.settings.penG;
+        return { name:p.name, klass:p.klass||"", dtP, dtH, dtG, pt:x.pt||0, tt: dtP+dtH+dtG-(x.pt||0) };
+      }).sort((a,b)=>{
         if(a.tt!==b.tt) return a.tt-b.tt;
         if(a.dtP!==b.dtP) return a.dtP-b.dtP;
         if(a.dtH!==b.dtH) return a.dtH-b.dtH;
         if(a.dtG!==b.dtG) return a.dtG-b.dtG;
         return a.name.localeCompare(b.name);
       });
-      html+=`<h4>Varv ${v+1}</h4><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>DT P</th><th>DT H</th><th>DT K</th><th>PT</th><th>TT</th></tr></thead><tbody>`;
-      lapList.forEach((p,i)=>{
-        html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass}</td><td>${to2(p.dtP)}</td><td>${to2(p.dtH)}</td><td>${to2(p.dtG)}</td><td>${to2(p.pt)}</td><td><b>${to2(p.tt)}</b></td></tr>`;
-      });
-      html+="</tbody></table>";
+      html += `<h4>Varv ${v+1}</h4><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>DT P</th><th>DT H</th><th>DT K</th><th>PT</th><th>TT</th></tr></thead><tbody>`;
+      lapList.forEach((r,i)=>{ html+=`<tr><td>${i+1}</td><td>${r.name}</td><td>${r.klass}</td><td>${to2(r.dtP)}</td><td>${to2(r.dtH)}</td><td>${to2(r.dtG)}</td><td>${to2(r.pt)}</td><td><b>${to2(r.tt)}</b></td></tr>`; });
+      html += "</tbody></table>";
     }
-
-    cont.innerHTML=html;
-    if(state.activeIndex>=0){ $("activeBadge").textContent="Aktiv: "+state.people[state.activeIndex].name; }
-    else { $("activeBadge").textContent="Ingen vald"; }
+    cont.innerHTML = html;
   }
 
-  $("addParticipant").addEventListener("click",()=>{
-    const name=$("name").value.trim(); if(!name) return;
-    const p={ name, club:$("club").value.trim(), klass:$("klass").value.trim(),
-      hasPT:$("hasPT").value==="yes", ptTotal:Number($("ptTotal").value)||0,
-      laps:[], sum:{} };
-    state.people.push(p);
-    state.activeIndex=state.people.length-1;
-    ["name","club","klass","ptTotal"].forEach(id=>$(id).value="");
-    $("hasPT").value="no";
-    $("active").innerHTML=state.people.map((x,i)=>`<option value="${i}">${x.name}</option>`).join("");
-    $("active").value=state.activeIndex;
-    render();
-  });
+  function refreshActive(){
+    $("active").innerHTML = s.people.map((p,i)=>`<option value="${i}">${p.name}</option>`).join("");
+    if(s.people.length){
+      if(s.activeIndex<0) s.activeIndex=0;
+      $("active").value = s.activeIndex;
+    }
+  }
 
-  $("active").addEventListener("change",()=>{
-    state.activeIndex=parseInt($("active").value,10);
-    render();
-  });
-
-  $("saveLap").addEventListener("click",()=>{
-    if(state.activeIndex<0) return;
-    const vals={ tP:Number($("tP").value)||0, mP:Number($("mP").value)||0,
-                 tH:Number($("tH").value)||0, mH:Number($("mH").value)||0,
-                 tG:Number($("tG").value)||0, mG:Number($("mG").value)||0,
-                 pt:Number($("ptLap").value)||0 };
-    // check if all zero
-    if(Object.values(vals).every(v=>v===0)) return;
-    state.people[state.activeIndex].laps.push(vals);
-    render();
-    ["tP","mP","tH","mH","tG","mG","ptLap"].forEach(id=>$(id).value="");
-  });
-
-  $("exportCSV").addEventListener("click",()=>{
-    const list=state.people.slice(); sortPeople(list);
-    let csv="Placering;Namn;Klass;ΣDT P;ΣDT H;ΣDT K;ΣPT;TT\n";
+  // Export
+  $("exportCSV").addEventListener("click", ()=>{
+    const list=s.people.slice(); sortPeople(list);
+    let csv=`Resultatlista – 3GF;${s.settings.evName||""};${s.settings.evDate||""};${s.settings.evPlace||""}\n`;
+    csv+="Placering;Namn;Klass;ΣDT P;ΣDT H;ΣDT K;ΣPT;TT\n";
     list.forEach((p,i)=>{ csv+=`${i+1};${p.name};${p.klass||""};${to2(p.sum.dtP)};${to2(p.sum.dtH)};${to2(p.sum.dtG)};${to2(p.sum.pt)};${to2(p.sum.tt)}\n`; });
-    const maxLaps=Math.max(...state.people.map(p=>p.laps.length));
+    const maxLaps = Math.max(...s.people.map(p=>p.laps.length));
     for(let v=0; v<maxLaps; v++){
       csv+=`\nVarv ${v+1}\nPlacering;Namn;Klass;DT P;DT H;DT K;PT;TT\n`;
-      const lapList=state.people.filter(p=>p.laps[v]).map(p=>{
-        const s=p.laps[v];
-        const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg, tt=dtP+dtH+dtG-(s.pt||0);
-        return {name:p.name,klass:p.klass||"",dtP,dtH,dtG,pt:s.pt||0,tt};
-      });
-      lapList.sort((a,b)=>a.tt-b.tt);
-      lapList.forEach((p,i)=>{ csv+=`${i+1};${p.name};${p.klass};${to2(p.dtP)};${to2(p.dtH)};${to2(p.dtG)};${to2(p.pt)};${to2(p.tt)}\n`; });
+      const lapList = s.people.filter(p=>p.laps[v]).map(p=>{
+        const x=p.laps[v]; const dtP=(x.tP||0)+(x.mP||0)*s.settings.penP; const dtH=(x.tH||0)+(x.mH||0)*s.settings.penH; const dtG=(x.tG||0)+(x.mG||0)*s.settings.penG;
+        return { name:p.name, klass:p.klass||"", dtP, dtH, dtG, pt:x.pt||0, tt:dtP+dtH+dtG-(x.pt||0) };
+      }).sort((a,b)=>a.tt-b.tt);
+      lapList.forEach((r,i)=>{ csv+=`${i+1};${r.name};${r.klass};${to2(r.dtP)};${to2(r.dtH)};${to2(r.dtG)};${to2(r.pt)};${to2(r.tt)}\n`; });
     }
-    const blob=new Blob([csv],{type:"text/csv"});
+    const blob = new Blob([csv],{type:"text/csv;charset=utf-8"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="resultat.csv"; a.click();
   });
 
-  $("exportHTML").addEventListener("click",()=>{
-    const list=state.people.slice(); sortPeople(list);
-    let html=`<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Resultatlista</title>
+  $("exportHTML").addEventListener("click", ()=>{
+    const list=s.people.slice(); sortPeople(list);
+    let html = `<!doctype html><html lang="sv"><meta charset="utf-8"><title>Resultat</title>
     <style>body{font-family:sans-serif;margin:20px;}table{border-collapse:collapse;width:100%;margin-bottom:20px;}
-    th,td{border:1px solid #ccc;padding:6px;text-align:left;}th{background:#eee;}</style></head><body>
-    <h1>Resultatlista – 3GF</h1><h2>Totalresultat</h2><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th></tr></thead><tbody>`;
-    list.forEach((p,i)=>{html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td><td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td><td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`;});
+    th,td{border:1px solid #ccc;padding:6px;text-align:left;}th{background:#eee;}</style><body>`;
+    html += `<h1>Resultatlista – 3GF</h1><div><b>${s.settings.evName||""}</b> – ${s.settings.evDate||""} – ${s.settings.evPlace||""}</div>`;
+    html += `<h2>Totalresultat</h2><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th></tr></thead><tbody>`;
+    list.forEach((p,i)=>{ html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td><td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td><td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`; });
     html+="</tbody></table>";
-    const maxLaps=Math.max(...state.people.map(p=>p.laps.length));
+    const maxLaps = Math.max(...s.people.map(p=>p.laps.length));
     for(let v=0; v<maxLaps; v++){
       html+=`<h2>Varv ${v+1}</h2><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>DT P</th><th>DT H</th><th>DT K</th><th>PT</th><th>TT</th></tr></thead><tbody>`;
-      const lapList=state.people.filter(p=>p.laps[v]).map(p=>{
-        const s=p.laps[v];
-        const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg, tt=dtP+dtH+dtG-(s.pt||0);
-        return {name:p.name,klass:p.klass||"",dtP,dtH,dtG,pt:s.pt||0,tt};
-      });
-      lapList.sort((a,b)=>a.tt-b.tt);
-      lapList.forEach((p,i)=>{html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass}</td><td>${to2(p.dtP)}</td><td>${to2(p.dtH)}</td><td>${to2(p.dtG)}</td><td>${to2(p.pt)}</td><td><b>${to2(p.tt)}</b></td></tr>`;});
+      const lapList = s.people.filter(p=>p.laps[v]).map(p=>{
+        const x=p.laps[v]; const dtP=(x.tP||0)+(x.mP||0)*s.settings.penP; const dtH=(x.tH||0)+(x.mH||0)*s.settings.penH; const dtG=(x.tG||0)+(x.mG||0)*s.settings.penG;
+        return { name:p.name, klass:p.klass||"", dtP, dtH, dtG, pt:x.pt||0, tt:dtP+dtH+dtG-(x.pt||0) };
+      }).sort((a,b)=>a.tt-b.tt);
+      lapList.forEach((r,i)=>{ html+=`<tr><td>${i+1}</td><td>${r.name}</td><td>${r.klass}</td><td>${to2(r.dtP)}</td><td>${to2(r.dtH)}</td><td>${to2(r.dtG)}</td><td>${to2(r.pt)}</td><td><b>${to2(r.tt)}</b></td></tr>`; });
       html+="</tbody></table>";
     }
-    html+="</body></html>";
+    html += "</body></html>";
     const w=window.open(""); w.document.write(html); w.document.close();
   });
+
+  // Server SAVE / LOAD
+  $("btnSaveServer").addEventListener("click", async ()=>{
+    saveSettings();
+    if(!s.eventId){ alert("Sätt Event-ID under Start först."); return; }
+    const payload = { event: { id:s.eventId, name:s.settings.evName, date:s.settings.evDate, place:s.settings.evPlace, penP:s.settings.penP, penH:s.settings.penH, penG:s.settings.penG }, people: s.people };
+    const res = await fetch(`/api/event?id=${encodeURIComponent(s.eventId)}`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+    if(!res.ok){ alert("Kunde inte spara till server."); return; }
+    alert("Sparat till server.");
+  });
+
+  $("btnLoadServer").addEventListener("click", async ()=>{
+    saveSettings();
+    if(!s.eventId){ alert("Sätt Event-ID under Start först."); return; }
+    const res = await fetch(`/api/event?id=${encodeURIComponent(s.eventId)}`);
+    if(!res.ok){ alert("Kunde inte ladda från server."); return; }
+    const data = await res.json();
+    if(data.event){
+      s.settings.evName = data.event.name||""; s.settings.evDate=data.event.date||""; s.settings.evPlace=data.event.place||"";
+      s.settings.penP = Number(data.event.pen_p)||2; s.settings.penH=Number(data.event.pen_h)||2; s.settings.penG=Number(data.event.pen_g)||2;
+      $("evName").value=s.settings.evName; $("evDate").value=s.settings.evDate; $("evPlace").value=s.settings.evPlace;
+      $("penP").value=s.settings.penP; $("penH").value=s.settings.penH; $("penG").value=s.settings.penG;
+    }
+    s.people = (data.people||[]).map(r=>({ id:r.external_id, name:r.name, club:r.club||"", klass:r.class||"", laps:r.laps||[], sum:{} }));
+    s.activeIndex = s.people.length? 0 : -1;
+    showComp(); render(); persist();
+  });
+
+  // Persistence local
+  function persist(){ try{ localStorage.setItem("gf_v79", JSON.stringify(s)); }catch(e){} }
+  (function restore(){
+    try{
+      const raw=localStorage.getItem("gf_v79"); if(!raw) return;
+      const b=JSON.parse(raw); Object.assign(s, b);
+      $("penP").value=s.settings.penP; $("penH").value=s.settings.penH; $("penG").value=s.settings.penG;
+      $("evName").value=s.settings.evName; $("evDate").value=s.settings.evDate; $("evPlace").value=s.settings.evPlace;
+      $("eventId").value=s.eventId||"";
+    }catch(e){}
+    if(s.people.length){ showComp(); }
+    render();
+  })();
 })();
 </script>
 </body>
