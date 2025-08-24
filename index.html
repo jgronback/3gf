@@ -2,129 +2,166 @@
 <html lang="sv">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>3GF – Mobil v7.3.1 (Varv, autospar)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3GF – Mobil v7.4</title>
   <style>
-    :root{ --bg:#0e1117; --panel:#151a23; --panel2:#10141d; --border:#283043; --ink:#e7ebf4; --muted:#a5b0c4; --accent:#82aaff; }
-    html, body { margin:0; padding:0; background:var(--bg); color:var(--ink);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; -webkit-tap-highlight-color: transparent; }
-    .wrap { max-width: 980px; margin: 16px auto 88px; padding: 0 12px; }
-    h1 { font-size: 1.25rem; margin: 0 0 6px; }
-    .sub { color:var(--muted); margin: 0 0 10px; font-size:.95rem; }
-    .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:12px; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; } .row > * { flex: 1 1 160px; }
-    label { display:block; font-size:.95rem; color:#d4dcee; margin:6px 0 6px; }
-    input, select, button { border-radius:12px; border:1px solid var(--border); background:var(--panel2); color:var(--ink);
-      padding:14px; font-size:16px; }
-    input[type="number"]{ width:100%; box-sizing:border-box; }
-    .btn { padding:16px; font-weight:700; border:1px solid var(--border); border-radius:12px; }
-    .btn.primary { background:#1e2a44; }
-    .btn.ghost { background:var(--panel2); }
-    .touchRow { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
-    @media (min-width: 880px){ .touchRow{ grid-template-columns: 1fr 120px 1fr 120px; } }
-    .badgeWrap { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .pill { display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid var(--border); }
-    .nameBadge { font-weight:700; }
-    table { width:100%; border-collapse: collapse; margin-top: 8px; table-layout: fixed; }
-    th, td { padding:10px; border-bottom: 1px solid var(--border); word-break: break-word; }
-    th { background:#0f1624; position: sticky; top: 0; }
-    .hidden{ display:none !important; }
-    .compact input, .compact select { padding:10px; font-size:15px; }
-    .compact label { font-size:.9rem; margin:4px 0; }
-    .compact .btn { padding:12px; font-size:15px; }
-    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:16px; background:#0f1624; color:#e7ebf4;
-      border:1px solid var(--border); border-radius:10px; padding:10px 14px; z-index:9999; opacity:0; transition:opacity .2s; }
-    .toast.show{ opacity:1; }
-    .meta { color: var(--muted); font-size:.85rem; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0e1117;
+      color: #e7ebf4;
+      margin: 0; padding: 10px;
+    }
+    h1 { font-size: 1.2rem; }
+    .panel {
+      background: #151a23;
+      border: 1px solid #283043;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    label { display: block; margin-top: 8px; font-size: 0.9rem; }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      border-radius: 8px;
+      border: 1px solid #283043;
+      background: #10141d;
+      color: #e7ebf4;
+      font-size: 1rem;
+    }
+    button { cursor: pointer; font-weight: bold; }
+    .btn-primary { background: #1e2a44; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 120px; }
+    .active-badge {
+      font-weight: bold;
+      background: #1e2a44;
+      padding: 6px 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td {
+      border-bottom: 1px solid #283043;
+      padding: 6px;
+      text-align: left;
+    }
+    th { background: #10141d; }
   </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>3GF – Mobil v7.3.1</h1>
-  <p class="sub">Varv-baserad inmatning (Pistol → Hagel → Karbin → ev. PT). Autosparar. Enter = Spara varv & nästa skytt.</p>
+  <h1>3GF – Mobil v7.4</h1>
 
-  <div class="panel compact">
+  <div class="panel">
     <h3>Lägg till deltagare</h3>
     <div class="row">
-      <div><label>Namn</label><input id="name" type="text"></div>
-      <div><label>Klubb</label><input id="club" type="text"></div>
-      <div><label>Klass</label><input id="klass" type="text"></div>
-      <div><label>Använder PT</label><select id="hasPT"><option value="no">Nej</option><option value="yes">Ja</option></select></div>
-      <div><label>PT totalt (sek)</label><input id="ptTotal" type="number" step="0.01"></div>
+      <div><label>Namn</label><input id="name" type="text" /></div>
+      <div><label>Klubb</label><input id="club" type="text" /></div>
+      <div><label>Klass</label><input id="klass" type="text" /></div>
     </div>
     <div class="row">
-      <button id="addParticipant" class="btn primary">Lägg till</button>
-      <button id="clearForm" class="btn ghost">Töm</button>
-      <button id="delParticipant" class="btn ghost">Ta bort aktiv</button>
+      <div><label>Använder PT?</label>
+        <select id="hasPT"><option value="no">Nej</option><option value="yes">Ja</option></select>
+      </div>
+      <div><label>PT totalt (sek)</label><input id="ptTotal" type="number" step="0.01" /></div>
     </div>
+    <button id="addParticipant" class="btn-primary">Lägg till</button>
   </div>
 
   <div class="panel">
-    <div class="badgeWrap">
-      <div class="nameBadge" id="badgeName">—</div>
-      <div class="pill">Varv <span id="badgeLap">1</span></div>
-      <div class="pill">TT: <span id="badgeTT">0.00</span> s</div>
+    <label>Aktiv deltagare</label>
+    <select id="active"></select>
+    <div id="activeBadge" class="active-badge">Ingen vald</div>
+
+    <div class="row">
+      <div><label>Pistol tid</label><input id="tP" type="number" step="0.01" /></div>
+      <div><label>Miss P</label><input id="mP" type="number" /></div>
     </div>
-    <div class="touchRow">
-      <div><label>Pistol tid</label><input id="tP" type="number" step="0.01"></div>
-      <div><label>Miss P</label><input id="mPCount" type="number"></div>
-      <div><label>Hagel tid</label><input id="tH" type="number" step="0.01"></div>
-      <div><label>Miss H</label><input id="mHCount" type="number"></div>
-      <div><label>Karbin tid</label><input id="tG" type="number" step="0.01"></div>
-      <div><label>Miss K</label><input id="mGCount" type="number"></div>
-      <div><label>PT varv</label><input id="ptLap" type="number" step="0.01"></div>
+    <div class="row">
+      <div><label>Hagel tid</label><input id="tH" type="number" step="0.01" /></div>
+      <div><label>Miss H</label><input id="mH" type="number" /></div>
     </div>
+    <div class="row">
+      <div><label>Karbin tid</label><input id="tG" type="number" step="0.01" /></div>
+      <div><label>Miss K</label><input id="mG" type="number" /></div>
+    </div>
+    <div><label>PT detta varv</label><input id="ptLap" type="number" step="0.01" /></div>
+
+    <button id="saveLap" class="btn-primary">Spara varv</button>
   </div>
 
   <div class="panel">
-    <strong>Resultat</strong>
-    <div id="resultsContainer"></div>
+    <h3>Resultat</h3>
+    <table id="results">
+      <thead>
+        <tr><th>#</th><th>Namn</th><th>Klass</th><th>TT</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
-</div>
-<div id="toast" class="toast">Tillagt</div>
 
 <script>
 (function(){
-  const $ = (id)=>document.getElementById(id);
-  const state = { people:[], activeIndex:-1, lapIndex:0 };
-  function num(v){ return v? Number(v):0; }
+  const $ = id => document.getElementById(id);
+  const state = { people:[], activeIndex:-1 };
+
   function to2(x){ return (Math.round(x*100)/100).toFixed(2); }
-  function ensureLaps(p,count=1){ while(p.laps.length<count) p.laps.push({tP:0,mP:0,tH:0,mH:0,tG:0,mG:0,pt:0}); }
+
   function recalc(p){
-    let dtP=0,dtH=0,dtG=0,pt=0;
-    for(const s of p.laps){ dtP+=s.tP+s.mP*2; dtH+=s.tH+s.mH*2; dtG+=s.tG+s.mG*2; pt+=s.pt; }
-    const ptTot=(p.hasPT?num(p.ptTotal):0)+pt;
-    p.sum={dtP,dtH,dtG,pt:ptTot,tt:dtP+dtH+dtG-ptTot};
+    const mp=2,mh=2,mg=2;
+    const s = p.lap;
+    const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg;
+    const tt = dtP+dtH+dtG-(p.hasPT? p.ptTotal:0)-(s.pt||0);
+    p.sum={tt};
   }
-  function renderResults(){
-    const c=$("resultsContainer"); c.innerHTML="";
-    state.people.forEach(recalc);
+
+  function render(){
+    const tb = $("results").querySelector("tbody");
+    tb.innerHTML="";
     state.people.forEach((p,i)=>{
-      const div=document.createElement("div");
-      div.textContent=`${i+1}. ${p.name} (${p.klass}) – TT: ${to2(p.sum.tt)}s`;
-      c.appendChild(div);
+      recalc(p);
+      const tr=document.createElement("tr");
+      tr.innerHTML=`<td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td><td>${to2(p.sum.tt)} s</td>`;
+      tb.appendChild(tr);
     });
+    if(state.activeIndex>=0){
+      $("activeBadge").textContent="Aktiv: "+state.people[state.activeIndex].name;
+    } else {
+      $("activeBadge").textContent="Ingen vald";
+    }
   }
-  function addParticipant(){
+
+  $("addParticipant").addEventListener("click",()=>{
     const name=$("name").value.trim(); if(!name) return;
-    const club=$("club").value.trim(), klass=$("klass").value.trim();
-    const hasPT=$("hasPT").value==="yes", ptTotal=num($("ptTotal").value);
-    const p={name,club,klass,hasPT,ptTotal,laps:[],sum:{}};
-    ensureLaps(p); recalc(p); state.people.push(p);
-    state.activeIndex=state.people.length-1; renderResults();
-    ["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no";
-    const t=$("toast"); t.textContent="Deltagare tillagd"; t.classList.add("show");
-    setTimeout(()=>t.classList.remove("show"),1200);
-  }
-  function deleteActive(){
+    const p={name, club:$("club").value.trim(), klass:$("klass").value.trim(),
+             hasPT:$("hasPT").value==="yes", ptTotal:Number($("ptTotal").value)||0,
+             lap:{tP:0,mP:0,tH:0,mH:0,tG:0,mG:0,pt:0}, sum:{}};
+    state.people.push(p);
+    state.activeIndex=state.people.length-1;
+    ["name","club","klass","ptTotal"].forEach(id=>$(id).value="");
+    $("hasPT").value="no";
+    $("active").innerHTML=state.people.map((x,i)=>`<option value="${i}">${x.name}</option>`).join("");
+    $("active").value=state.activeIndex;
+    render();
+  });
+
+  $("active").addEventListener("change",()=>{
+    state.activeIndex=parseInt($("active").value,10);
+    render();
+  });
+
+  $("saveLap").addEventListener("click",()=>{
     if(state.activeIndex<0) return;
-    state.people.splice(state.activeIndex,1);
-    state.activeIndex=Math.min(state.activeIndex,state.people.length-1);
-    renderResults();
-  }
-  $("addParticipant").addEventListener("click",addParticipant);
-  $("clearForm").addEventListener("click",()=>{["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no";});
-  $("delParticipant").addEventListener("click",deleteActive);
+    const p=state.people[state.activeIndex];
+    p.lap={ tP:Number($("tP").value)||0, mP:Number($("mP").value)||0,
+            tH:Number($("tH").value)||0, mH:Number($("mH").value)||0,
+            tG:Number($("tG").value)||0, mG:Number($("mG").value)||0,
+            pt:Number($("ptLap").value)||0 };
+    render();
+    ["tP","mP","tH","mH","tG","mG","ptLap"].forEach(id=>$(id).value="");
+  });
 })();
 </script>
 </body>
