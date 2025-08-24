@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>3GF – Mobil v7.2 (Varv, autospar)</title>
+  <title>3GF – Mobil v7.3 (Varv, autospar)</title>
   <style>
     :root{ --bg:#0e1117; --panel:#151a23; --panel2:#10141d; --border:#283043; --ink:#e7ebf4; --muted:#a5b0c4; --accent:#82aaff; }
     html, body { margin:0; padding:0; background:var(--bg); color:var(--ink);
@@ -17,7 +17,7 @@
     label { display:block; font-size:.95rem; color:#d4dcee; margin:6px 0 6px; }
     input, select, button, textarea {
       border-radius:12px; border:1px solid var(--border); background:var(--panel2); color:var(--ink);
-      padding:14px; font-size:16px; /* undvik iOS autozoom */
+      padding:14px; font-size:16px;
     }
     input[type="number"]{ width:100%; box-sizing:border-box; }
     .btn { padding:16px; font-weight:700; border:1px solid var(--border); border-radius:12px; }
@@ -33,7 +33,6 @@
     th, td { padding:10px; border-bottom: 1px solid var(--border); text-align:left; vertical-align: top; word-break: break-word; }
     th { background:#0f1624; position: sticky; top: 0; z-index: 1; }
     .hidden{ display:none !important; }
-    /* compact add participant */
     .compact input, .compact select { padding:10px; font-size:15px; }
     .compact label { font-size:.9rem; margin:4px 0; }
     .compact .btn { padding:12px; font-size:15px; }
@@ -41,10 +40,8 @@
     .toast.show{ opacity:1; }
     .warn{ background:#7d1f2b; color:#fff; border:1px solid #aa3b4c; border-radius:8px; padding:8px 12px; margin-bottom:8px; }
     .meta { color: var(--muted); font-size:.85rem; }
-    /* responsive columns: on small screens, hide advanced cols unless toggled */
     .col-adv { display: none; }
     #showAdvanced:checked ~ #resultsContainer .col-adv { display: table-cell; }
-    /* ensure nice widths */
     .col-rank{ width: 44px; }
     .col-name{ width: 34%; }
     .col-club{ width: 26%; }
@@ -60,12 +57,11 @@
 </head>
 <body>
   <div class="wrap">
-    <h1>3GF – Mobil v7.2</h1>
+    <h1>3GF – Mobil v7.3</h1>
     <p class="sub">Varv-baserad inmatning (Pistol → Hagel → Karbin → ev. PT). Autosparar. Enter = Spara varv & nästa skytt.</p>
 
     <div id="storageWarn" class="warn hidden">Obs: Lagring i webbläsaren är begränsad/avstängd. Appen funkar, men listan sparas inte om sidan laddas om.</div>
 
-    <!-- Arbetsvy -->
     <div class="panel">
       <div class="row">
         <div><label>Snabbsök</label><input id="search" type="text" placeholder="Filtrera deltagare"></div>
@@ -74,7 +70,6 @@
       </div>
     </div>
 
-    <!-- Inställningar -->
     <div class="panel">
       <div class="row">
         <div><label>Miss-straff (M) global (s)</label><input id="mGlobal" type="number" step="0.01" value="2"></div>
@@ -104,10 +99,9 @@
           <button id="printBtn" class="btn">Skriv ut (standard)</button>
         </div>
       </div>
-      <div class="meta">Bygg: v7.2</div>
+      <div class="meta">Bygg: v7.3</div>
     </div>
 
-    <!-- Lägg till deltagare (kompakt) -->
     <div class="panel compact">
       <h3 style="margin:0 0 8px;">Lägg till deltagare</h3>
       <div class="row">
@@ -124,7 +118,6 @@
       </div>
     </div>
 
-    <!-- Inmatning för varv -->
     <div class="panel">
       <div class="badgeWrap">
         <div class="nameBadge" id="badgeName">—</div>
@@ -243,7 +236,6 @@
     const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
     const prevVal = act.value;
     act.innerHTML = state.people.map((p,i)=>`<option value="${i}">${p.name}${p.club? " – "+p.club:""}${p.klass? " ("+p.klass+")":""}</option>`).join("");
-    // Update search info
     const total = state.people.length;
     const hiddenCount = Array.from(act.options).filter(o=>o.hidden).length;
     const visible = total - hiddenCount;
@@ -365,11 +357,9 @@
     recalc(p); refreshBadge(); renderResults(); persist();
   }
 
-  // Debounced autosave
   let tDeb=null;
   function autosave(){ clearTimeout(tDeb); tDeb=setTimeout(saveLap, 250); }
 
-  // Enter => spara & nästa
   document.addEventListener("keydown", (e)=>{
     if (e.key==="Enter" && idsLap.includes(document.activeElement.id)){
       e.preventDefault(); saveLap(); nextStep();
@@ -400,8 +390,7 @@
     const p = { name, club, klass, hasPT, ptTotal, laps:[], sum:{dtP:0,dtH:0,dtG:0,pt: hasPT? ptTotal: 0, tt: 0} };
     ensureLaps(p, laps); recalc(p);
     state.people.push(p);
-    // Clear any search filter that could hide the new item
-    $("search").value=""; 
+    $("search").value="";
     state.activeIndex = state.people.length-1; state.lapIndex = 0;
     refreshSelectors(); loadLap(); renderResults(); persist();
     ["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no";
@@ -416,7 +405,6 @@
     toast("Deltagare borttagen");
   }
 
-  // Mobile-friendly tap binding (works in in-app browsers)
   function bindTap(el, handler){
     if (!el) return;
     let armed = false;
@@ -446,14 +434,12 @@
   $("active").addEventListener("change", ()=>{ state.activeIndex = parseInt($("active").value,10); loadLap(); });
   $("lap").addEventListener("change", ()=>{ state.lapIndex = parseInt($("lap").value,10); loadLap(); });
 
-  // reactive settings
   ["mGlobal","mP","mH","mG","varvCount","autoNext","groupByClass","tieOrder"].forEach(id=>$(id).addEventListener("input", ()=>{
     const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
     state.people.forEach(p=>{ ensureLaps(p, laps); recalc(p); });
     refreshSelectors(); refreshBadge(); renderResults(); persist();
   }));
 
-  // export/import/print
   $("exportCSV").addEventListener("click", ()=>{
     const header = ["Placering","Namn","Klubb","Klass","SumDT_P","SumDT_H","SumDT_K","SumPT","TT"];
     const lines = [header.join(";")];
@@ -487,6 +473,22 @@
       sections = `<table class="t"><thead><tr><th>#</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="r">TT</th></tr></thead>
       <tbody>${tableRows(list)}</tbody></table>`;
     }
+    // IMPORTANT FIX: Escape the closing </script> in the returned HTML to avoid breaking the outer script tag
+    const innerScript = String.raw`\
+        // Fill header fields from opener if available
+        try{
+          const src = window.opener || null;
+          if (src){
+            document.getElementById('phName').textContent = src.document.getElementById('hdrName')?.value || '';
+            document.getElementById('phDate').textContent = src.document.getElementById('hdrDate')?.value || '';
+            document.getElementById('phPlace').textContent = src.document.getElementById('hdrPlace')?.value || '';
+            document.getElementById('phDiscipline').textContent = src.document.getElementById('hdrDiscipline')?.value || '';
+            document.getElementById('phClass').textContent = src.document.getElementById('hdrClass')?.value || '';
+            document.getElementById('phOrg').textContent = src.document.getElementById('hdrOrg')?.value || '';
+          }
+          setTimeout(()=>window.print(), 300);
+        }catch(e){}
+    `;
     return `<!doctype html><html lang="sv"><head><meta charset="utf-8"><title>${title}</title>
       <style>
         body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin:24px; color:#111; }
@@ -512,36 +514,22 @@
         <div><strong>Arrangör:</strong> <span id="phOrg"></span></div>
       </div>
       ${sections}
-      <script>
-        // Fill header fields from opener if available
-        try{
-          const src = window.opener || null;
-          if (src){
-            document.getElementById('phName').textContent = src.document.getElementById('hdrName')?.value || '';
-            document.getElementById('phDate').textContent = src.document.getElementById('hdrDate')?.value || '';
-            document.getElementById('phPlace').textContent = src.document.getElementById('hdrPlace')?.value || '';
-            document.getElementById('phDiscipline').textContent = src.document.getElementById('hdrDiscipline')?.value || '';
-            document.getElementById('phClass').textContent = src.document.getElementById('hdrClass')?.value || '';
-            document.getElementById('phOrg').textContent = src.document.getElementById('hdrOrg')?.value || '';
-          }
-          setTimeout(()=>window.print(), 300);
-        }catch(e){}
-      </script>
+      <script>${innerScript}<\/script>
       </body></html>`;
   }
 
-  $("exportPretty").addEventListener("click", ()=>{
+  document.getElementById("exportPretty").addEventListener("click", ()=>{
     const html = buildPrettyHTML("3GF – Resultat");
     const w = window.open("", "_blank");
     if (w){ w.document.open(); w.document.write(html); w.document.close(); }
   });
-  $("exportPrettyHTML").addEventListener("click", ()=>{
+  document.getElementById("exportPrettyHTML").addEventListener("click", ()=>{
     const html = buildPrettyHTML("3GF – Resultat");
     const blob = new Blob([html], {type:"text/html;charset=utf-8"});
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "resultat_snygg.html"; a.click(); URL.revokeObjectURL(a.href);
   });
 
-  $("exportJSON").addEventListener("click", ()=>{
+  document.getElementById("exportJSON").addEventListener("click", ()=>{
     const blob = new Blob([JSON.stringify({ people: state.people, settings:{
       mGlobal:num($("mGlobal").value),
       mP: $("mP").value===""? null:num($("mP").value),
@@ -554,8 +542,8 @@
     } }, null, 2)], {type:"application/json"});
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "resultat.json"; a.click(); URL.revokeObjectURL(a.href);
   });
-  $("importJSON").addEventListener("click", ()=> $("fileInput").click());
-  $("fileInput").addEventListener("change", (e)=>{ const f=e.target.files?.[0]; if (!f) return;
+  document.getElementById("importJSON").addEventListener("click", ()=> document.getElementById("fileInput").click());
+  document.getElementById("fileInput").addEventListener("change", (e)=>{ const f=e.target.files?.[0]; if (!f) return;
     const rd = new FileReader(); rd.onload = ()=>{ try{ const b=JSON.parse(rd.result);
       if (b.people && Array.isArray(b.people)){ state.people = b.people; }
       if (b.settings){
@@ -575,11 +563,9 @@
     }catch(err){ alert("Kunde inte läsa JSON"); } };
     rd.readAsText(f); e.target.value="";
   });
-  $("printBtn").addEventListener("click", ()=>{ window.print(); });
+  document.getElementById("printBtn").addEventListener("click", ()=>{ window.print(); });
 
-  // persistence
   function persist(){
-    if (!storageOK) return;
     try{
       const blob = {
         people: state.people,
@@ -594,15 +580,16 @@
           tieOrder: $("tieOrder").value
         }
       };
-      localStorage.setItem("kombinerad_mobile_v7_2", JSON.stringify(blob));
+      if (canStorage()) localStorage.setItem("kombinerad_mobile_v7_3", JSON.stringify(blob));
     }catch(e){}
   }
   function restore(){
     if (restoredOnce) return;
     restoredOnce = true;
-    if (!storageOK) return;
     try{
-      const raw = localStorage.getItem("kombinerad_mobile_v7_2"); if (!raw) return;
+      if (!canStorage()) return;
+      const raw = localStorage.getItem("kombinerad_mobile_v7_3") || localStorage.getItem("kombinerad_mobile_v7_2") || localStorage.getItem("kombinerad_mobile_v7");
+      if (!raw) return;
       const b = JSON.parse(raw), s=b.settings||{};
       $("mGlobal").value = s.mGlobal ?? 2;
       $("mP").value = s.mP ?? ""; $("mH").value = s.mH ?? ""; $("mG").value = s.mG ?? "";
@@ -614,9 +601,26 @@
     }catch(e){}
   }
 
-  // init
   restore();
   refreshSelectors(); loadLap(); renderResults(); refreshBadge();
+
+  idsLap.forEach(id=>{
+    $(id).addEventListener("input", autosave);
+    $(id).addEventListener("change", autosave);
+    $(id).addEventListener("blur", autosave);
+  });
+  bindTap(document.getElementById("addParticipant"), addParticipant);
+  bindTap(document.getElementById("clearForm"), ()=>{ ["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no"; });
+  bindTap(document.getElementById("delParticipant"), deleteActive);
+  bindTap(document.getElementById("clearLap"), clearLap);
+
+  function bindTap(el, handler){
+    if (!el) return;
+    let armed = false;
+    el.addEventListener("touchstart", ()=>{ armed = true; }, {passive:true});
+    el.addEventListener("touchend", (e)=>{ if (armed){ e.preventDefault(); handler(e); armed=false; } }, {passive:false});
+    el.addEventListener("click", (e)=>{ handler(e); });
+  }
 })();
 </script>
 </body>
