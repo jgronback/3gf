@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>3GF – Mobil v7.3 (Varv, autospar)</title>
+  <title>3GF – Mobil v7.3.1 (Varv, autospar)</title>
   <style>
     :root{ --bg:#0e1117; --panel:#151a23; --panel2:#10141d; --border:#283043; --ink:#e7ebf4; --muted:#a5b0c4; --accent:#82aaff; }
     html, body { margin:0; padding:0; background:var(--bg); color:var(--ink);
@@ -11,14 +11,11 @@
     .wrap { max-width: 980px; margin: 16px auto 88px; padding: 0 12px; }
     h1 { font-size: 1.25rem; margin: 0 0 6px; }
     .sub { color:var(--muted); margin: 0 0 10px; font-size:.95rem; }
-    .grid { display:grid; gap:12px; }
     .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:12px; }
     .row { display:flex; gap:10px; flex-wrap:wrap; } .row > * { flex: 1 1 160px; }
     label { display:block; font-size:.95rem; color:#d4dcee; margin:6px 0 6px; }
-    input, select, button, textarea {
-      border-radius:12px; border:1px solid var(--border); background:var(--panel2); color:var(--ink);
-      padding:14px; font-size:16px;
-    }
+    input, select, button { border-radius:12px; border:1px solid var(--border); background:var(--panel2); color:var(--ink);
+      padding:14px; font-size:16px; }
     input[type="number"]{ width:100%; box-sizing:border-box; }
     .btn { padding:16px; font-weight:700; border:1px solid var(--border); border-radius:12px; }
     .btn.primary { background:#1e2a44; }
@@ -27,600 +24,107 @@
     @media (min-width: 880px){ .touchRow{ grid-template-columns: 1fr 120px 1fr 120px; } }
     .badgeWrap { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .pill { display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid var(--border); }
-    .nameBadge { font-weight:700; letter-spacing:.2px; }
-    .right{ text-align:right; }
+    .nameBadge { font-weight:700; }
     table { width:100%; border-collapse: collapse; margin-top: 8px; table-layout: fixed; }
-    th, td { padding:10px; border-bottom: 1px solid var(--border); text-align:left; vertical-align: top; word-break: break-word; }
-    th { background:#0f1624; position: sticky; top: 0; z-index: 1; }
+    th, td { padding:10px; border-bottom: 1px solid var(--border); word-break: break-word; }
+    th { background:#0f1624; position: sticky; top: 0; }
     .hidden{ display:none !important; }
     .compact input, .compact select { padding:10px; font-size:15px; }
     .compact label { font-size:.9rem; margin:4px 0; }
     .compact .btn { padding:12px; font-size:15px; }
-    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:16px; background:#0f1624; color:#e7ebf4; border:1px solid var(--border); border-radius:10px; padding:10px 14px; z-index:9999; opacity:0; transition:opacity .2s; }
+    .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:16px; background:#0f1624; color:#e7ebf4;
+      border:1px solid var(--border); border-radius:10px; padding:10px 14px; z-index:9999; opacity:0; transition:opacity .2s; }
     .toast.show{ opacity:1; }
-    .warn{ background:#7d1f2b; color:#fff; border:1px solid #aa3b4c; border-radius:8px; padding:8px 12px; margin-bottom:8px; }
     .meta { color: var(--muted); font-size:.85rem; }
-    .col-adv { display: none; }
-    #showAdvanced:checked ~ #resultsContainer .col-adv { display: table-cell; }
-    .col-rank{ width: 44px; }
-    .col-name{ width: 34%; }
-    .col-club{ width: 26%; }
-    .col-class{ width: 70px; }
-    .col-num{ width: 90px; text-align: right; }
-    @media (min-width: 860px){
-      .col-adv { display: table-cell; }
-      .col-name{ width: 30%; }
-      .col-club{ width: 24%; }
-    }
-    @media print{ .no-print{ display:none !important; } body{ background:white; color:black; } th{ background:white; position: static; } .panel, .wrap { background:white; border:none; } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>3GF – Mobil v7.3</h1>
-    <p class="sub">Varv-baserad inmatning (Pistol → Hagel → Karbin → ev. PT). Autosparar. Enter = Spara varv & nästa skytt.</p>
+<div class="wrap">
+  <h1>3GF – Mobil v7.3.1</h1>
+  <p class="sub">Varv-baserad inmatning (Pistol → Hagel → Karbin → ev. PT). Autosparar. Enter = Spara varv & nästa skytt.</p>
 
-    <div id="storageWarn" class="warn hidden">Obs: Lagring i webbläsaren är begränsad/avstängd. Appen funkar, men listan sparas inte om sidan laddas om.</div>
-
-    <div class="panel">
-      <div class="row">
-        <div><label>Snabbsök</label><input id="search" type="text" placeholder="Filtrera deltagare"></div>
-        <div><label>Aktiv deltagare</label><select id="active"></select><div id="searchInfo" class="meta"></div></div>
-        <div><label>Aktivt varv</label><select id="lap"></select></div>
-      </div>
+  <div class="panel compact">
+    <h3>Lägg till deltagare</h3>
+    <div class="row">
+      <div><label>Namn</label><input id="name" type="text"></div>
+      <div><label>Klubb</label><input id="club" type="text"></div>
+      <div><label>Klass</label><input id="klass" type="text"></div>
+      <div><label>Använder PT</label><select id="hasPT"><option value="no">Nej</option><option value="yes">Ja</option></select></div>
+      <div><label>PT totalt (sek)</label><input id="ptTotal" type="number" step="0.01"></div>
     </div>
-
-    <div class="panel">
-      <div class="row">
-        <div><label>Miss-straff (M) global (s)</label><input id="mGlobal" type="number" step="0.01" value="2"></div>
-        <div><label>M P</label><input id="mP" type="number" step="0.01"></div>
-        <div><label>M H</label><input id="mH" type="number" step="0.01"></div>
-        <div><label>M K (karbin)</label><input id="mG" type="number" step="0.01"></div>
-        <div><label>Antal varv</label><input id="varvCount" type="number" step="1" value="1" min="1" max="10"></div>
-        <div><label>Auto-nästa skytt</label><select id="autoNext"><option value="yes">Ja</option><option value="no">Nej</option></select></div>
-      </div>
-      <div class="row">
-        <div><label>Gruppera per klass</label><select id="groupByClass"><option value="yes">Ja</option><option value="no">Nej</option></select></div>
-        <div><label>Tie-break</label>
-          <select id="tieOrder">
-            <option value="TT,DTG,DTH,DTP,LastStage,Name">TT → DTG → DTH → DTP → Sista varv → Namn</option>
-            <option value="TT,DTP,DTH,DTG,LastStage,Name">TT → DTP → DTH → DTG → Sista varv → Namn</option>
-            <option value="TT,LastStage,DTG,DTH,DTP,Name">TT → Sista varv → DTG → DTH → DTP → Namn</option>
-            <option value="TT,Name">TT → Namn</option>
-          </select>
-        </div>
-        <div class="row" style="gap:10px;">
-          <button id="exportCSV" class="btn">Exportera CSV</button>
-          <button id="exportJSON" class="btn">Exportera JSON</button>
-          <button id="exportPretty" class="btn">Snygg utskrift / PDF</button>
-          <button id="exportPrettyHTML" class="btn">Exportera snygg HTML</button>
-          <button id="importJSON" class="btn">Importera JSON</button>
-          <input id="fileInput" type="file" accept="application/json" class="hidden">
-          <button id="printBtn" class="btn">Skriv ut (standard)</button>
-        </div>
-      </div>
-      <div class="meta">Bygg: v7.3</div>
-    </div>
-
-    <div class="panel compact">
-      <h3 style="margin:0 0 8px;">Lägg till deltagare</h3>
-      <div class="row">
-        <div><label>Namn</label><input id="name" type="text" placeholder="För- och efternamn" autocomplete="name"></div>
-        <div><label>Klubb</label><input id="club" type="text" placeholder="t.ex. Sätila PSK"></div>
-        <div><label>Klass</label><input id="klass" type="text" placeholder="R / A / C"></div>
-        <div><label>Använder PT (total)</label><select id="hasPT"><option value="no">Nej</option><option value="yes">Ja</option></select></div>
-        <div><label>PT totalt (sek)</label><input id="ptTotal" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></div>
-      </div>
-      <div class="row" style="gap:10px;">
-        <button id="addParticipant" class="btn primary" type="button">Lägg till</button>
-        <button id="clearForm" class="btn ghost" type="button">Töm</button>
-        <button id="delParticipant" class="btn ghost" type="button">Ta bort aktiv</button>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="badgeWrap">
-        <div class="nameBadge" id="badgeName">—</div>
-        <div class="pill">Varv <span id="badgeLap">1</span>/<span id="badgeLapMax">1</span></div>
-        <div style="flex:1"></div>
-        <div class="pill">TT: <span id="badgeTT">0.00</span> s</div>
-      </div>
-
-      <div class="touchRow" style="margin-top:8px;">
-        <div><label><strong>Pistol</strong> – Tid (s)</label><input id="tP" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></div>
-        <div><label>Miss P</label><input id="mPCount" type="number" step="1" inputmode="numeric" placeholder="0"></div>
-        <div><label><strong>Hagel</strong> – Tid (s)</label><input id="tH" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></div>
-        <div><label>Miss H</label><input id="mHCount" type="number" step="1" inputmode="numeric" placeholder="0"></div>
-        <div><label><strong>Karbin</strong> – Tid (s)</label><input id="tG" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></div>
-        <div><label>Miss K</label><input id="mGCount" type="number" step="1" inputmode="numeric" placeholder="0"></div>
-        <div><label>PT detta varv (sek)</label><input id="ptLap" type="number" step="0.01" inputmode="decimal" placeholder="0,00"></div>
-      </div>
-      <div class="row" style="gap:10px; margin-top:10px;">
-        <button id="saveLap" class="btn primary" type="button">Spara varv</button>
-        <button id="nextLap" class="btn ghost" type="button">Nästa varv/skylt</button>
-        <button id="clearLap" class="btn ghost" type="button">Töm varv</button>
-      </div>
-      <div class="sub">Autospar: varje ändring räknas och sparas. Enter/Return i ett fält = Spara varv & nästa (enligt inställning).</div>
-    </div>
-
-    <div class="panel">
-      <div class="row" style="align-items:center; margin-bottom:6px;">
-        <strong>Resultat</strong>
-        <div style="flex:1"></div>
-        <label style="display:inline-flex; align-items:center; gap:8px;"><input type="checkbox" id="toggleDetails"> Visa per‑varv</label>
-      </div>
-      <label class="meta" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:6px;">
-        <input type="checkbox" id="showAdvanced"> Visa avancerade kolumner (ΣDT per gren & ΣPT)
-      </label>
-      <div id="resultsContainer"></div>
+    <div class="row">
+      <button id="addParticipant" class="btn primary">Lägg till</button>
+      <button id="clearForm" class="btn ghost">Töm</button>
+      <button id="delParticipant" class="btn ghost">Ta bort aktiv</button>
     </div>
   </div>
 
-  <div id="toast" class="toast" role="status" aria-live="polite">Tillagt</div>
+  <div class="panel">
+    <div class="badgeWrap">
+      <div class="nameBadge" id="badgeName">—</div>
+      <div class="pill">Varv <span id="badgeLap">1</span></div>
+      <div class="pill">TT: <span id="badgeTT">0.00</span> s</div>
+    </div>
+    <div class="touchRow">
+      <div><label>Pistol tid</label><input id="tP" type="number" step="0.01"></div>
+      <div><label>Miss P</label><input id="mPCount" type="number"></div>
+      <div><label>Hagel tid</label><input id="tH" type="number" step="0.01"></div>
+      <div><label>Miss H</label><input id="mHCount" type="number"></div>
+      <div><label>Karbin tid</label><input id="tG" type="number" step="0.01"></div>
+      <div><label>Miss K</label><input id="mGCount" type="number"></div>
+      <div><label>PT varv</label><input id="ptLap" type="number" step="0.01"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <strong>Resultat</strong>
+    <div id="resultsContainer"></div>
+  </div>
+</div>
+<div id="toast" class="toast">Tillagt</div>
 
 <script>
 (function(){
-  const $ = (id) => document.getElementById(id);
-  const state = { people: [], activeIndex: -1, lapIndex: 0 };
-  let restoredOnce = false;
-
-  const idsLap = ["tP","mPCount","tH","mHCount","tG","mGCount","ptLap"];
-
-  function canStorage(){
-    try{ const k="__t"; localStorage.setItem(k,"1"); localStorage.removeItem(k); return true; }catch(e){ return false; }
-  }
-  const storageOK = canStorage();
-  if (!storageOK){ const w=$("storageWarn"); if (w) w.classList.remove("hidden"); }
-
-  function toast(msg){
-    const el = $("toast"); el.textContent = msg; el.classList.add("show");
-    setTimeout(()=> el.classList.remove("show"), 1400);
-  }
-
-  function num(v){ if (v==null || v==="") return 0; const s=String(v).replace(",", "."); const x=Number(s); return Number.isFinite(x)? x:0; }
+  const $ = (id)=>document.getElementById(id);
+  const state = { people:[], activeIndex:-1, lapIndex:0 };
+  function num(v){ return v? Number(v):0; }
   function to2(x){ return (Math.round(x*100)/100).toFixed(2); }
-
-  function M(which){
-    const g = num($("mGlobal").value);
-    const mp = $("mP").value!=="" ? num($("mP").value) : null;
-    const mh = $("mH").value!=="" ? num($("mH").value) : null;
-    const mg = $("mG").value!=="" ? num($("mG").value) : null;
-    if (which==="P" && mp!=null) return mp;
-    if (which==="H" && mh!=null) return mh;
-    if (which==="G" && mg!=null) return mg;
-    return g;
-  }
-
-  function ensureLaps(p, count){
-    while (p.laps.length < count) p.laps.push({tP:0,mP:0,tH:0,mH:0,tG:0,mG:0,pt:0});
-  }
-
+  function ensureLaps(p,count=1){ while(p.laps.length<count) p.laps.push({tP:0,mP:0,tH:0,mH:0,tG:0,mG:0,pt:0}); }
   function recalc(p){
-    let dtP=0, dtH=0, dtG=0, pt=0;
-    const mP = M("P"), mH = M("H"), mG = M("G");
-    for (const s of p.laps){
-      dtP += s.tP + s.mP*mP;
-      dtH += s.tH + s.mH*mH;
-      dtG += s.tG + s.mG*mG;
-      pt  += s.pt || 0;
-    }
-    const ptTot = (p.hasPT ? num(p.ptTotal) : 0) + pt;
-    p.sum = { dtP, dtH, dtG, pt: ptTot, tt: dtP+dtH+dtG - ptTot };
+    let dtP=0,dtH=0,dtG=0,pt=0;
+    for(const s of p.laps){ dtP+=s.tP+s.mP*2; dtH+=s.tH+s.mH*2; dtG+=s.tG+s.mG*2; pt+=s.pt; }
+    const ptTot=(p.hasPT?num(p.ptTotal):0)+pt;
+    p.sum={dtP,dtH,dtG,pt:ptTot,tt:dtP+dtH+dtG-ptTot};
   }
-
-  function tieKeys(){
-    const order = $("tieOrder").value.split(",");
-    return (p) => order.map(k => {
-      switch(k){
-        case "TT": return p.sum.tt;
-        case "DTG": return p.sum.dtG;
-        case "DTH": return p.sum.dtH;
-        case "DTP": return p.sum.dtP;
-        case "LastStage": {
-          const s = p.laps[Math.max(0, p.laps.length-1)] || {tP:0,mP:0,tH:0,mH:0,tG:0,mG:0,pt:0};
-          const mP = M("P"), mH = M("H"), mG = M("G");
-          return (s.tP+s.mP*mP)+(s.tH+s.mH*mH)+(s.tG+s.mG*mG)-(s.pt||0);
-        }
-        case "Name": return p.name.toLowerCase();
-        default: return 0;
-      }
-    });
-  }
-  function sortPeople(list){
-    const keyer = tieKeys();
-    list.sort((a,b)=>{ const ka=keyer(a), kb=keyer(b); for (let i=0;i<ka.length;i++){ if (ka[i]<kb[i]) return -1; if (ka[i]>kb[i]) return 1; } return 0; });
-  }
-
-  function refreshSelectors(){
-    const act = $("active"), lapSel=$("lap");
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    const prevVal = act.value;
-    act.innerHTML = state.people.map((p,i)=>`<option value="${i}">${p.name}${p.club? " – "+p.club:""}${p.klass? " ("+p.klass+")":""}</option>`).join("");
-    const total = state.people.length;
-    const hiddenCount = Array.from(act.options).filter(o=>o.hidden).length;
-    const visible = total - hiddenCount;
-    const si = $("searchInfo"); if (si) si.textContent = total? `Visas: ${visible}/${total}` : "";
-    if (state.people.length){
-      state.activeIndex = prevVal? Math.min(parseInt(prevVal,10), state.people.length-1) : (state.activeIndex>=0? state.activeIndex:0);
-      act.value = String(state.activeIndex);
-    } else { state.activeIndex = -1; }
-    lapSel.innerHTML = "";
-    for (let i=0;i<laps;i++){ const o=document.createElement("option"); o.value=String(i); o.textContent="Varv "+(i+1); lapSel.appendChild(o); }
-    if (state.lapIndex >= laps) state.lapIndex = laps-1;
-    if (state.lapIndex<0) state.lapIndex=0;
-    lapSel.value = String(state.lapIndex);
-    $("badgeLap").textContent = String(state.lapIndex+1);
-    $("badgeLapMax").textContent = String(laps);
-  }
-
-  function refreshBadge(){
-    const p = state.people[state.activeIndex];
-    $("badgeLap").textContent = String(state.lapIndex+1);
-    $("badgeTT").textContent = p? to2(p.sum.tt): "0.00";
-    $("badgeName").textContent = p? (p.name + (p.club? " – "+p.club:"") + (p.klass? " ("+p.klass+")":"")): "—";
-  }
-
   function renderResults(){
-    const cont = $("resultsContainer");
-    cont.innerHTML = "";
-    const list = state.people.slice();
-    list.forEach(recalc);
-    if ($("groupByClass").value==="yes"){
-      const by = {};
-      list.forEach(p=>{ const k=p.klass||"Okänd"; (by[k] ||= []).push(p); });
-      Object.keys(by).sort().forEach(k => { const arr=by[k]; sortPeople(arr); cont.appendChild(tableFor(arr, k)); });
-    } else {
-      sortPeople(list); cont.appendChild(tableFor(list, null));
-    }
-  }
-
-  function tableFor(arr, klass){
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    const showDetails = $("toggleDetails").checked;
-    const wrapper = document.createElement("div");
-    if (klass){ const head = document.createElement("div"); head.className="meta"; head.style.margin="6px 0"; head.textContent="Klass: "+klass; wrapper.appendChild(head); }
-    const table = document.createElement("table");
-    const thead = document.createElement("thead");
-    thead.innerHTML = `<tr>
-      <th class="col-rank">#</th>
-      <th class="col-name">Namn</th>
-      <th class="col-club">Klubb</th>
-      <th class="col-class">Klass</th>
-      <th class="col-num col-adv">ΣDT P</th>
-      <th class="col-num col-adv">ΣDT H</th>
-      <th class="col-num col-adv">ΣDT K</th>
-      <th class="col-num col-adv">ΣPT</th>
-      <th class="col-num">TT</th>
-    </tr>`;
-    table.appendChild(thead);
-    const tbody = document.createElement("tbody");
-
-    arr.forEach((p,i)=>{
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td class="col-rank right">${i+1}</td>
-        <td class="col-name">${p.name}</td>
-        <td class="col-club">${p.club||""}</td>
-        <td class="col-class">${p.klass||""}</td>
-        <td class="col-num col-adv">${to2(p.sum.dtP)}</td>
-        <td class="col-num col-adv">${to2(p.sum.dtH)}</td>
-        <td class="col-num col-adv">${to2(p.sum.dtG)}</td>
-        <td class="col-num col-adv">${to2(p.sum.pt)}</td>
-        <td class="col-num right"><strong>${to2(p.sum.tt)}</strong></td>`;
-      tr.addEventListener("click", ()=>{ state.activeIndex = state.people.indexOf(p); refreshSelectors(); loadLap(); window.scrollTo({ top: 0, behavior: "smooth" }); });
-      tbody.appendChild(tr);
-
-      if (showDetails){
-        for (let s=0; s<laps; s++){
-          const st = p.laps[s] || {tP:0,mP:0,tH:0,mH:0,tG:0,mG:0,pt:0};
-          const mP = M("P"), mH = M("H"), mG = M("G");
-          const dtP = st.tP + st.mP*mP, dtH = st.tH + st.mH*mH, dtG = st.tG + st.mG*mG;
-          const dtSum = dtP + dtH + dtG - (st.pt||0);
-          const tr2 = document.createElement("tr");
-          tr2.innerHTML = `<td></td><td colspan="3" class="sub">Varv ${s+1}</td>
-            <td class="col-num col-adv">${to2(dtP)}</td>
-            <td class="col-num col-adv">${to2(dtH)}</td>
-            <td class="col-num col-adv">${to2(dtG)}</td>
-            <td class="col-num col-adv">${st.pt? to2(st.pt): ""}</td>
-            <td class="col-num right">${to2(dtSum)}</td>`;
-          tbody.appendChild(tr2);
-        }
-      }
+    const c=$("resultsContainer"); c.innerHTML="";
+    state.people.forEach(recalc);
+    state.people.forEach((p,i)=>{
+      const div=document.createElement("div");
+      div.textContent=`${i+1}. ${p.name} (${p.klass}) – TT: ${to2(p.sum.tt)}s`;
+      c.appendChild(div);
     });
-    table.appendChild(tbody);
-    wrapper.appendChild(table);
-    return wrapper;
   }
-
-  function loadLap(){
-    const p = state.people[state.activeIndex];
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    if (!p){ idsLap.forEach(id=>$(id).value=""); return; }
-    ensureLaps(p, laps);
-    const s = p.laps[state.lapIndex];
-    $("tP").value = s.tP || ""; $("mPCount").value = s.mP || "";
-    $("tH").value = s.tH || ""; $("mHCount").value = s.mH || "";
-    $("tG").value = s.tG || ""; $("mGCount").value = s.mG || "";
-    $("ptLap").value = s.pt || "";
-    recalc(p); refreshBadge();
-  }
-
-  function saveLap(){
-    const p = state.people[state.activeIndex];
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    if (!p) return;
-    ensureLaps(p, laps);
-    const s = p.laps[state.lapIndex];
-    s.tP = num($("tP").value);  s.mP = num($("mPCount").value);
-    s.tH = num($("tH").value);  s.mH = num($("mHCount").value);
-    s.tG = num($("tG").value);  s.mG = num($("mGCount").value);
-    s.pt = num($("ptLap").value);
-    recalc(p); refreshBadge(); renderResults(); persist();
-  }
-
-  let tDeb=null;
-  function autosave(){ clearTimeout(tDeb); tDeb=setTimeout(saveLap, 250); }
-
-  document.addEventListener("keydown", (e)=>{
-    if (e.key==="Enter" && idsLap.includes(document.activeElement.id)){
-      e.preventDefault(); saveLap(); nextStep();
-    }
-  });
-  $("saveLap").addEventListener("click", ()=>{ saveLap(); toast("Varv sparat"); });
-  $("nextLap").addEventListener("click", ()=>{ saveLap(); nextStep(); });
-
-  function nextStep(){
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    if (state.lapIndex < laps-1){
-      state.lapIndex++; $("lap").value = String(state.lapIndex); loadLap(); toast("Nästa varv");
-    } else {
-      if ($("autoNext").value==="yes" && state.people.length){
-        state.activeIndex = (state.activeIndex + 1) % state.people.length; $("active").value = String(state.activeIndex);
-        state.lapIndex = 0; $("lap").value = "0"; loadLap(); toast("Nästa skytt");
-      }
-    }
-  }
-
-  function clearLap(){ idsLap.forEach(id=>$(id).value=""); autosave(); }
-
   function addParticipant(){
-    const name = $("name").value.trim(); if (!name){ $("name").focus(); return; }
-    const club = $("club").value.trim(); const klass = $("klass").value.trim();
-    const hasPT = $("hasPT").value==="yes"; const ptTotal = num($("ptTotal").value);
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    const p = { name, club, klass, hasPT, ptTotal, laps:[], sum:{dtP:0,dtH:0,dtG:0,pt: hasPT? ptTotal: 0, tt: 0} };
-    ensureLaps(p, laps); recalc(p);
-    state.people.push(p);
-    $("search").value="";
-    state.activeIndex = state.people.length-1; state.lapIndex = 0;
-    refreshSelectors(); loadLap(); renderResults(); persist();
+    const name=$("name").value.trim(); if(!name) return;
+    const club=$("club").value.trim(), klass=$("klass").value.trim();
+    const hasPT=$("hasPT").value==="yes", ptTotal=num($("ptTotal").value);
+    const p={name,club,klass,hasPT,ptTotal,laps:[],sum:{}};
+    ensureLaps(p); recalc(p); state.people.push(p);
+    state.activeIndex=state.people.length-1; renderResults();
     ["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no";
-    toast("Deltagare tillagd");
+    const t=$("toast"); t.textContent="Deltagare tillagd"; t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"),1200);
   }
   function deleteActive(){
-    if (state.activeIndex<0) return;
+    if(state.activeIndex<0) return;
     state.people.splice(state.activeIndex,1);
-    state.activeIndex = Math.min(state.activeIndex, state.people.length-1);
-    if (state.activeIndex<0){ state.lapIndex=0; }
-    refreshSelectors(); loadLap(); renderResults(); persist();
-    toast("Deltagare borttagen");
+    state.activeIndex=Math.min(state.activeIndex,state.people.length-1);
+    renderResults();
   }
-
-  function bindTap(el, handler){
-    if (!el) return;
-    let armed = false;
-    el.addEventListener("touchstart", ()=>{ armed = true; }, {passive:true});
-    el.addEventListener("touchend", (e)=>{ if (armed){ e.preventDefault(); handler(e); armed=false; } }, {passive:false});
-    el.addEventListener("click", (e)=>{ handler(e); });
-  }
-
-  bindTap($("addParticipant"), addParticipant);
-  bindTap($("clearForm"), ()=>{ ["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no"; });
-  bindTap($("delParticipant"), deleteActive);
-  bindTap($("clearLap"), clearLap);
-
-  idsLap.forEach(id=>{
-    $(id).addEventListener("input", autosave);
-    $(id).addEventListener("change", autosave);
-    $(id).addEventListener("blur", autosave);
-  });
-
-  $("search").addEventListener("input", ()=>{
-    const term = $("search").value.toLowerCase();
-    const options = $("active").options;
-    for (let i=0;i<options.length;i++){ const txt=options[i].text.toLowerCase(); options[i].hidden = term && !txt.includes(term); }
-    const total = options.length; const hidden = Array.from(options).filter(o=>o.hidden).length;
-    const si = $("searchInfo"); if (si) si.textContent = total? `Visas: ${total-hidden}/${total}` : "";
-  });
-  $("active").addEventListener("change", ()=>{ state.activeIndex = parseInt($("active").value,10); loadLap(); });
-  $("lap").addEventListener("change", ()=>{ state.lapIndex = parseInt($("lap").value,10); loadLap(); });
-
-  ["mGlobal","mP","mH","mG","varvCount","autoNext","groupByClass","tieOrder"].forEach(id=>$(id).addEventListener("input", ()=>{
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    state.people.forEach(p=>{ ensureLaps(p, laps); recalc(p); });
-    refreshSelectors(); refreshBadge(); renderResults(); persist();
-  }));
-
-  $("exportCSV").addEventListener("click", ()=>{
-    const header = ["Placering","Namn","Klubb","Klass","SumDT_P","SumDT_H","SumDT_K","SumPT","TT"];
-    const lines = [header.join(";")];
-    const list = state.people.slice(); list.forEach(recalc); sortPeople(list);
-    list.forEach((p,i)=> lines.push([i+1, p.name, p.club||"", p.klass||"", to2(p.sum.dtP), to2(p.sum.dtH), to2(p.sum.dtG), to2(p.sum.pt), to2(p.sum.tt)].join(";")));
-    const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "resultat.csv"; a.click(); URL.revokeObjectURL(a.href);
-  });
-
-  function buildPrettyHTML(title){
-    const list = state.people.slice(); list.forEach(recalc); sortPeople(list);
-    const byClass = $("groupByClass").value==="yes";
-    const laps = Math.max(1, parseInt(($("varvCount").value||"1"),10));
-    function tableRows(arr){
-      return arr.map((p,i)=>`
-        <tr>
-          <td class="r">${i+1}</td>
-          <td>${p.name}</td><td>${p.club||""}</td><td>${p.klass||""}</td>
-          <td class="r">${to2(p.sum.tt)}</td>
-        </tr>
-      `).join("");
-    }
-    let sections = "";
-    if (byClass){
-      const map = {}; list.forEach(p=>{ const k=p.klass||"Okänd"; (map[k] ||= []).push(p); });
-      Object.keys(map).sort().forEach(k=>{ const arr=map[k]; sections += `
-        <h3>Klass: ${k}</h3>
-        <table class="t"><thead><tr><th>#</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="r">TT</th></tr></thead>
-        <tbody>${tableRows(arr)}</tbody></table>`; });
-    } else {
-      sections = `<table class="t"><thead><tr><th>#</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="r">TT</th></tr></thead>
-      <tbody>${tableRows(list)}</tbody></table>`;
-    }
-    // IMPORTANT FIX: Escape the closing </script> in the returned HTML to avoid breaking the outer script tag
-    const innerScript = String.raw`\
-        // Fill header fields from opener if available
-        try{
-          const src = window.opener || null;
-          if (src){
-            document.getElementById('phName').textContent = src.document.getElementById('hdrName')?.value || '';
-            document.getElementById('phDate').textContent = src.document.getElementById('hdrDate')?.value || '';
-            document.getElementById('phPlace').textContent = src.document.getElementById('hdrPlace')?.value || '';
-            document.getElementById('phDiscipline').textContent = src.document.getElementById('hdrDiscipline')?.value || '';
-            document.getElementById('phClass').textContent = src.document.getElementById('hdrClass')?.value || '';
-            document.getElementById('phOrg').textContent = src.document.getElementById('hdrOrg')?.value || '';
-          }
-          setTimeout(()=>window.print(), 300);
-        }catch(e){}
-    `;
-    return `<!doctype html><html lang="sv"><head><meta charset="utf-8"><title>${title}</title>
-      <style>
-        body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin:24px; color:#111; }
-        h1{ font-size:20px; margin:0 0 6px; } .meta{ color:#555; margin:0 0 14px; }
-        .grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:8px 16px; margin:10px 0 18px; }
-        .t{ width:100%; border-collapse:collapse; margin-bottom:16px; }
-        .t th, .t td{ padding:8px 10px; border-bottom:1px solid #ddd; text-align:left; }
-        .t th{ background:#f5f7fb; }
-        .r{ text-align:right; white-space:nowrap; }
-        @media print{
-          @page { size: A4 portrait; margin: 14mm; }
-          body{ margin:0; }
-          h1{ margin-top:0; }
-        }
-      </style></head><body>
-      <h1>RESULTATLISTA – 3GF</h1>
-      <div class="grid">
-        <div><strong>Tävlingsnamn:</strong> <span id="phName"></span></div>
-        <div><strong>Datum:</strong> <span id="phDate"></span></div>
-        <div><strong>Plats:</strong> <span id="phPlace"></span></div>
-        <div><strong>Gren:</strong> <span id="phDiscipline"></span></div>
-        <div><strong>Klass:</strong> <span id="phClass"></span></div>
-        <div><strong>Arrangör:</strong> <span id="phOrg"></span></div>
-      </div>
-      ${sections}
-      <script>${innerScript}<\/script>
-      </body></html>`;
-  }
-
-  document.getElementById("exportPretty").addEventListener("click", ()=>{
-    const html = buildPrettyHTML("3GF – Resultat");
-    const w = window.open("", "_blank");
-    if (w){ w.document.open(); w.document.write(html); w.document.close(); }
-  });
-  document.getElementById("exportPrettyHTML").addEventListener("click", ()=>{
-    const html = buildPrettyHTML("3GF – Resultat");
-    const blob = new Blob([html], {type:"text/html;charset=utf-8"});
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "resultat_snygg.html"; a.click(); URL.revokeObjectURL(a.href);
-  });
-
-  document.getElementById("exportJSON").addEventListener("click", ()=>{
-    const blob = new Blob([JSON.stringify({ people: state.people, settings:{
-      mGlobal:num($("mGlobal").value),
-      mP: $("mP").value===""? null:num($("mP").value),
-      mH: $("mH").value===""? null:num($("mH").value),
-      mG: $("mG").value===""? null:num($("mG").value),
-      varvCount: Math.max(1, parseInt(($("varvCount").value||"1"),10)),
-      autoNext: $("autoNext").value,
-      groupByClass: $("groupByClass").value,
-      tieOrder: $("tieOrder").value
-    } }, null, 2)], {type:"application/json"});
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "resultat.json"; a.click(); URL.revokeObjectURL(a.href);
-  });
-  document.getElementById("importJSON").addEventListener("click", ()=> document.getElementById("fileInput").click());
-  document.getElementById("fileInput").addEventListener("change", (e)=>{ const f=e.target.files?.[0]; if (!f) return;
-    const rd = new FileReader(); rd.onload = ()=>{ try{ const b=JSON.parse(rd.result);
-      if (b.people && Array.isArray(b.people)){ state.people = b.people; }
-      if (b.settings){
-        const s=b.settings;
-        $("mGlobal").value = s.mGlobal ?? $("mGlobal").value;
-        $("mP").value = s.mP ?? $("mP").value;
-        $("mH").value = s.mH ?? $("mH").value;
-        $("mG").value = s.mG ?? $("mG").value;
-        $("varvCount").value = s.varvCount ?? $("varvCount").value;
-        $("autoNext").value = s.autoNext ?? $("autoNext").value;
-        $("groupByClass").value = s.groupByClass ?? $("groupByClass").value;
-        $("tieOrder").value = s.tieOrder ?? $("tieOrder").value;
-      }
-      state.people.forEach(recalc);
-      state.activeIndex = state.people.length? 0 : -1; state.lapIndex = 0;
-      refreshSelectors(); renderResults(); loadLap(); persist();
-    }catch(err){ alert("Kunde inte läsa JSON"); } };
-    rd.readAsText(f); e.target.value="";
-  });
-  document.getElementById("printBtn").addEventListener("click", ()=>{ window.print(); });
-
-  function persist(){
-    try{
-      const blob = {
-        people: state.people,
-        settings: {
-          mGlobal:num($("mGlobal").value),
-          mP: $("mP").value===""? null:num($("mP").value),
-          mH: $("mH").value===""? null:num($("mH").value),
-          mG: $("mG").value===""? null:num($("mG").value),
-          varvCount: Math.max(1, parseInt(($("varvCount").value||"1"),10)),
-          autoNext: $("autoNext").value,
-          groupByClass: $("groupByClass").value,
-          tieOrder: $("tieOrder").value
-        }
-      };
-      if (canStorage()) localStorage.setItem("kombinerad_mobile_v7_3", JSON.stringify(blob));
-    }catch(e){}
-  }
-  function restore(){
-    if (restoredOnce) return;
-    restoredOnce = true;
-    try{
-      if (!canStorage()) return;
-      const raw = localStorage.getItem("kombinerad_mobile_v7_3") || localStorage.getItem("kombinerad_mobile_v7_2") || localStorage.getItem("kombinerad_mobile_v7");
-      if (!raw) return;
-      const b = JSON.parse(raw), s=b.settings||{};
-      $("mGlobal").value = s.mGlobal ?? 2;
-      $("mP").value = s.mP ?? ""; $("mH").value = s.mH ?? ""; $("mG").value = s.mG ?? "";
-      $("varvCount").value = s.varvCount ?? 1; $("autoNext").value = s.autoNext ?? "yes";
-      $("groupByClass").value = s.groupByClass ?? "yes"; $("tieOrder").value = s.tieOrder ?? "TT,DTG,DTH,DTP,LastStage,Name";
-      state.people = b.people || [];
-      state.people.forEach(recalc);
-      state.activeIndex = state.people.length? 0 : -1; state.lapIndex = 0;
-    }catch(e){}
-  }
-
-  restore();
-  refreshSelectors(); loadLap(); renderResults(); refreshBadge();
-
-  idsLap.forEach(id=>{
-    $(id).addEventListener("input", autosave);
-    $(id).addEventListener("change", autosave);
-    $(id).addEventListener("blur", autosave);
-  });
-  bindTap(document.getElementById("addParticipant"), addParticipant);
-  bindTap(document.getElementById("clearForm"), ()=>{ ["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no"; });
-  bindTap(document.getElementById("delParticipant"), deleteActive);
-  bindTap(document.getElementById("clearLap"), clearLap);
-
-  function bindTap(el, handler){
-    if (!el) return;
-    let armed = false;
-    el.addEventListener("touchstart", ()=>{ armed = true; }, {passive:true});
-    el.addEventListener("touchend", (e)=>{ if (armed){ e.preventDefault(); handler(e); armed=false; } }, {passive:false});
-    el.addEventListener("click", (e)=>{ handler(e); });
-  }
+  $("addParticipant").addEventListener("click",addParticipant);
+  $("clearForm").addEventListener("click",()=>{["name","club","klass","ptTotal"].forEach(id=>$(id).value=""); $("hasPT").value="no";});
+  $("delParticipant").addEventListener("click",deleteActive);
 })();
 </script>
 </body>
