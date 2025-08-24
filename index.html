@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>3GF – Mobil v7.5</title>
+  <title>3GF – Mobil v7.6</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #0e1117; color: #e7ebf4; margin: 0; padding: 10px; }
     h1 { font-size: 1.2rem; }
@@ -22,7 +22,7 @@
   </style>
 </head>
 <body>
-  <h1>3GF – Mobil v7.5</h1>
+  <h1>3GF – Mobil v7.6</h1>
 
   <div class="panel">
     <h3>Lägg till deltagare</h3>
@@ -95,11 +95,23 @@
     p.sum={dtP,dtH,dtG,pt,tt};
   }
 
+  function sortPeople(list){
+    list.forEach(recalc);
+    list.sort((a,b)=>{
+      if(a.sum.tt!==b.sum.tt) return a.sum.tt-b.sum.tt;
+      if(a.sum.dtP!==b.sum.dtP) return a.sum.dtP-b.sum.dtP;
+      if(a.sum.dtH!==b.sum.dtH) return a.sum.dtH-b.sum.dtH;
+      if(a.sum.dtG!==b.sum.dtG) return a.sum.dtG-b.sum.dtG;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
   function render(){
     const tb = $("results").querySelector("tbody");
     tb.innerHTML="";
-    state.people.forEach(recalc);
-    state.people.forEach((p,i)=>{
+    const list=state.people.slice();
+    sortPeople(list);
+    list.forEach((p,i)=>{
       const tr=document.createElement("tr");
       tr.innerHTML=`<td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td>
       <td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td>
@@ -141,15 +153,17 @@
   });
 
   $("exportCSV").addEventListener("click",()=>{
+    const list=state.people.slice(); sortPeople(list);
     const header=["Placering","Namn","Klass","ΣDT P","ΣDT H","ΣDT K","ΣPT","TT"];
-    const rows=state.people.map((p,i)=>[i+1,p.name,p.klass||"",to2(p.sum.dtP),to2(p.sum.dtH),to2(p.sum.dtG),to2(p.sum.pt),to2(p.sum.tt)]);
+    const rows=list.map((p,i)=>[i+1,p.name,p.klass||"",to2(p.sum.dtP),to2(p.sum.dtH),to2(p.sum.dtG),to2(p.sum.pt),to2(p.sum.tt)]);
     const csv=[header,...rows].map(r=>r.join(";")).join("\\n");
     const blob=new Blob([csv],{type:"text/csv"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="resultat.csv"; a.click();
   });
 
   $("exportHTML").addEventListener("click",()=>{
-    const rows=state.people.map((p,i)=>`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td>
+    const list=state.people.slice(); sortPeople(list);
+    const rows=list.map((p,i)=>`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td>
       <td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td>
       <td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`).join("");
     const html=`<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Resultatlista</title>
