@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>3GF – Mobil v7.6</title>
+  <title>3GF – Mobil v7.7</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #0e1117; color: #e7ebf4; margin: 0; padding: 10px; }
     h1 { font-size: 1.2rem; }
@@ -22,7 +22,7 @@
   </style>
 </head>
 <body>
-  <h1>3GF – Mobil v7.6</h1>
+  <h1>3GF – Mobil v7.7</h1>
 
   <div class="panel">
     <h3>Lägg till deltagare</h3>
@@ -68,15 +68,7 @@
       <button id="exportCSV" class="btn-primary">Exportera CSV</button>
       <button id="exportHTML" class="btn-primary">Snygg utskrift / Export</button>
     </div>
-    <table id="results">
-      <thead>
-        <tr>
-          <th>#</th><th>Namn</th><th>Klass</th>
-          <th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div id="resultsContainer"></div>
   </div>
 
 <script>
@@ -88,11 +80,16 @@
   function to2(x){ return (Math.round(x*100)/100).toFixed(2); }
 
   function recalc(p){
-    const s = p.lap;
-    const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg;
-    const pt = (p.hasPT? p.ptTotal:0)+(s.pt||0);
-    const tt = dtP+dtH+dtG-pt;
-    p.sum={dtP,dtH,dtG,pt,tt};
+    let dtP=0,dtH=0,dtG=0,pt=0;
+    p.laps.forEach(s=>{
+      dtP+=s.tP+s.mP*mp;
+      dtH+=s.tH+s.mH*mh;
+      dtG+=s.tG+s.mG*mg;
+      pt += s.pt;
+    });
+    const ptTot=(p.hasPT? p.ptTotal:0)+pt;
+    const tt = dtP+dtH+dtG-ptTot;
+    p.sum={dtP,dtH,dtG,pt:ptTot,tt};
   }
 
   function sortPeople(list){
@@ -107,17 +104,41 @@
   }
 
   function render(){
-    const tb = $("results").querySelector("tbody");
-    tb.innerHTML="";
-    const list=state.people.slice();
-    sortPeople(list);
+    const cont=$("resultsContainer");
+    cont.innerHTML="";
+    if(!state.people.length) return;
+
+    // Totaltabell
+    const list=state.people.slice(); sortPeople(list);
+    let html="<h4>Totalresultat</h4><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th></tr></thead><tbody>";
     list.forEach((p,i)=>{
-      const tr=document.createElement("tr");
-      tr.innerHTML=`<td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td>
-      <td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td>
-      <td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td>`;
-      tb.appendChild(tr);
+      html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td><td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td><td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`;
     });
+    html+="</tbody></table>";
+
+    // Per varv
+    const maxLaps=Math.max(...state.people.map(p=>p.laps.length));
+    for(let v=0; v<maxLaps; v++){
+      const lapList=state.people.filter(p=>p.laps[v]).map(p=>{
+        const s=p.laps[v];
+        const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg, tt=dtP+dtH+dtG-(s.pt||0);
+        return {name:p.name,klass:p.klass||"",dtP,dtH,dtG,pt:s.pt||0,tt};
+      });
+      lapList.sort((a,b)=>{
+        if(a.tt!==b.tt) return a.tt-b.tt;
+        if(a.dtP!==b.dtP) return a.dtP-b.dtP;
+        if(a.dtH!==b.dtH) return a.dtH-b.dtH;
+        if(a.dtG!==b.dtG) return a.dtG-b.dtG;
+        return a.name.localeCompare(b.name);
+      });
+      html+=`<h4>Varv ${v+1}</h4><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>DT P</th><th>DT H</th><th>DT K</th><th>PT</th><th>TT</th></tr></thead><tbody>`;
+      lapList.forEach((p,i)=>{
+        html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass}</td><td>${to2(p.dtP)}</td><td>${to2(p.dtH)}</td><td>${to2(p.dtG)}</td><td>${to2(p.pt)}</td><td><b>${to2(p.tt)}</b></td></tr>`;
+      });
+      html+="</tbody></table>";
+    }
+
+    cont.innerHTML=html;
     if(state.activeIndex>=0){ $("activeBadge").textContent="Aktiv: "+state.people[state.activeIndex].name; }
     else { $("activeBadge").textContent="Ingen vald"; }
   }
@@ -126,7 +147,7 @@
     const name=$("name").value.trim(); if(!name) return;
     const p={ name, club:$("club").value.trim(), klass:$("klass").value.trim(),
       hasPT:$("hasPT").value==="yes", ptTotal:Number($("ptTotal").value)||0,
-      lap:{tP:0,mP:0,tH:0,mH:0,tG:0,mG:0,pt:0}, sum:{} };
+      laps:[], sum:{} };
     state.people.push(p);
     state.activeIndex=state.people.length-1;
     ["name","club","klass","ptTotal"].forEach(id=>$(id).value="");
@@ -143,34 +164,57 @@
 
   $("saveLap").addEventListener("click",()=>{
     if(state.activeIndex<0) return;
-    const p=state.people[state.activeIndex];
-    p.lap={ tP:Number($("tP").value)||0, mP:Number($("mP").value)||0,
-            tH:Number($("tH").value)||0, mH:Number($("mH").value)||0,
-            tG:Number($("tG").value)||0, mG:Number($("mG").value)||0,
-            pt:Number($("ptLap").value)||0 };
+    const vals={ tP:Number($("tP").value)||0, mP:Number($("mP").value)||0,
+                 tH:Number($("tH").value)||0, mH:Number($("mH").value)||0,
+                 tG:Number($("tG").value)||0, mG:Number($("mG").value)||0,
+                 pt:Number($("ptLap").value)||0 };
+    // check if all zero
+    if(Object.values(vals).every(v=>v===0)) return;
+    state.people[state.activeIndex].laps.push(vals);
     render();
     ["tP","mP","tH","mH","tG","mG","ptLap"].forEach(id=>$(id).value="");
   });
 
   $("exportCSV").addEventListener("click",()=>{
     const list=state.people.slice(); sortPeople(list);
-    const header=["Placering","Namn","Klass","ΣDT P","ΣDT H","ΣDT K","ΣPT","TT"];
-    const rows=list.map((p,i)=>[i+1,p.name,p.klass||"",to2(p.sum.dtP),to2(p.sum.dtH),to2(p.sum.dtG),to2(p.sum.pt),to2(p.sum.tt)]);
-    const csv=[header,...rows].map(r=>r.join(";")).join("\\n");
+    let csv="Placering;Namn;Klass;ΣDT P;ΣDT H;ΣDT K;ΣPT;TT\n";
+    list.forEach((p,i)=>{ csv+=`${i+1};${p.name};${p.klass||""};${to2(p.sum.dtP)};${to2(p.sum.dtH)};${to2(p.sum.dtG)};${to2(p.sum.pt)};${to2(p.sum.tt)}\n`; });
+    const maxLaps=Math.max(...state.people.map(p=>p.laps.length));
+    for(let v=0; v<maxLaps; v++){
+      csv+=`\nVarv ${v+1}\nPlacering;Namn;Klass;DT P;DT H;DT K;PT;TT\n`;
+      const lapList=state.people.filter(p=>p.laps[v]).map(p=>{
+        const s=p.laps[v];
+        const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg, tt=dtP+dtH+dtG-(s.pt||0);
+        return {name:p.name,klass:p.klass||"",dtP,dtH,dtG,pt:s.pt||0,tt};
+      });
+      lapList.sort((a,b)=>a.tt-b.tt);
+      lapList.forEach((p,i)=>{ csv+=`${i+1};${p.name};${p.klass};${to2(p.dtP)};${to2(p.dtH)};${to2(p.dtG)};${to2(p.pt)};${to2(p.tt)}\n`; });
+    }
     const blob=new Blob([csv],{type:"text/csv"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="resultat.csv"; a.click();
   });
 
   $("exportHTML").addEventListener("click",()=>{
     const list=state.people.slice(); sortPeople(list);
-    const rows=list.map((p,i)=>`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td>
-      <td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td>
-      <td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`).join("");
-    const html=`<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Resultatlista</title>
-      <style>body{font-family:sans-serif;margin:20px;}table{border-collapse:collapse;width:100%;}
-      th,td{border:1px solid #ccc;padding:6px;text-align:left;}th{background:#eee;}</style></head><body>
-      <h1>Resultatlista – 3GF</h1><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th>
-      <th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    let html=`<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Resultatlista</title>
+    <style>body{font-family:sans-serif;margin:20px;}table{border-collapse:collapse;width:100%;margin-bottom:20px;}
+    th,td{border:1px solid #ccc;padding:6px;text-align:left;}th{background:#eee;}</style></head><body>
+    <h1>Resultatlista – 3GF</h1><h2>Totalresultat</h2><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>ΣDT P</th><th>ΣDT H</th><th>ΣDT K</th><th>ΣPT</th><th>TT</th></tr></thead><tbody>`;
+    list.forEach((p,i)=>{html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass||""}</td><td>${to2(p.sum.dtP)}</td><td>${to2(p.sum.dtH)}</td><td>${to2(p.sum.dtG)}</td><td>${to2(p.sum.pt)}</td><td><b>${to2(p.sum.tt)}</b></td></tr>`;});
+    html+="</tbody></table>";
+    const maxLaps=Math.max(...state.people.map(p=>p.laps.length));
+    for(let v=0; v<maxLaps; v++){
+      html+=`<h2>Varv ${v+1}</h2><table><thead><tr><th>#</th><th>Namn</th><th>Klass</th><th>DT P</th><th>DT H</th><th>DT K</th><th>PT</th><th>TT</th></tr></thead><tbody>`;
+      const lapList=state.people.filter(p=>p.laps[v]).map(p=>{
+        const s=p.laps[v];
+        const dtP=s.tP+s.mP*mp, dtH=s.tH+s.mH*mh, dtG=s.tG+s.mG*mg, tt=dtP+dtH+dtG-(s.pt||0);
+        return {name:p.name,klass:p.klass||"",dtP,dtH,dtG,pt:s.pt||0,tt};
+      });
+      lapList.sort((a,b)=>a.tt-b.tt);
+      lapList.forEach((p,i)=>{html+=`<tr><td>${i+1}</td><td>${p.name}</td><td>${p.klass}</td><td>${to2(p.dtP)}</td><td>${to2(p.dtH)}</td><td>${to2(p.dtG)}</td><td>${to2(p.pt)}</td><td><b>${to2(p.tt)}</b></td></tr>`;});
+      html+="</tbody></table>";
+    }
+    html+="</body></html>";
     const w=window.open(""); w.document.write(html); w.document.close();
   });
 })();
