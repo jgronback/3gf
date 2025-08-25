@@ -1,153 +1,205 @@
+
+
 <!DOCTYPE html>
 <html lang="sv">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>3GF – Admin</title>
-<style>
-  body{ font-family:system-ui, sans-serif; background:#0e1117; color:#e7ebf4; margin:0; padding:12px; }
-  .panel{ background:#151a23; border:1px solid #283043; border-radius:10px; padding:12px; margin-bottom:12px; }
-  label{ display:block; margin-top:8px; }
-  input, select, button, textarea{ width:100%; padding:10px; margin-top:4px; border-radius:8px; border:1px solid #283043; background:#10141d; color:#e7ebf4; }
-  button{ font-weight:700; cursor:pointer; }
-  .btn{ background:#1e2a44; }
-  .row{ display:flex; gap:10px; flex-wrap:wrap;}
-  .row>div{ flex:1; min-width:180px; }
-  .list{ display:grid; gap:8px; }
-  .card{ border:1px solid #283043; background:#10141d; border-radius:10px; padding:10px; }
-  .actions{ display:flex; gap:8px; margin-top:6px; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3GF – Admin</title>
+  <style>
+    body{ font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0e1117; color:#e7ebf4; margin:0; padding:12px; }
+    .tabs{ display:flex; gap:8px; margin-bottom:12px; }
+    .tab{ padding:10px 14px; background:#151a23; border:1px solid #283043; border-radius:10px; cursor:pointer; }
+    .tab.active{ outline:2px solid #3b82f6; }
+    .panel{ background:#151a23; border:1px solid #283043; border-radius:12px; padding:12px; margin-bottom:12px; }
+    label{ display:block; margin:8px 0 4px; color:#a5b0c4; }
+    input, select, button, textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid #283043; background:#10141d; color:#e7ebf4; }
+    button{ cursor:pointer; font-weight:600; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; }
+    .row>div{ flex:1; min-width:220px; }
+    table{ width:100%; border-collapse:collapse; }
+    th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
+  </style>
 </head>
 <body>
-<h1>3GF – Admin</h1>
-
-<div class="panel">
-  <div class="row">
-    <div><label>Event-ID</label><input id="eventId" placeholder="satila-2025-09-14"></div>
-    <div><label>&nbsp;</label><button id="load" class="btn">Ladda från server</button></div>
-    <div><label>&nbsp;</label><button id="save" class="btn">Spara till server</button></div>
-  </div>
-  <div class="row">
-    <div><label>Namn</label><input id="evName"></div>
-    <div><label>Datum</label><input id="evDate" type="date"></div>
-    <div><label>Plats</label><input id="evPlace"></div>
-  </div>
-  <div class="row">
-    <div><label>Miss-straff P (s)</label><input id="penP" type="number" step="0.01"></div>
-    <div><label>Miss-straff H (s)</label><input id="penH" type="number" step="0.01"></div>
-    <div><label>Miss-straff K (s)</label><input id="penG" type="number" step="0.01"></div>
-  </div>
-</div>
-
-<div class="panel">
-  <h3>Deltagare</h3>
-  <div class="row">
-    <div><label>Namn</label><input id="pName"></div>
-    <div><label>Klubb</label><input id="pClub"></div>
-    <div><label>Klass</label><input id="pClass"></div>
-    <div><label>&nbsp;</label><button id="addP" class="btn">Lägg till</button></div>
-  </div>
-  <div id="plist" class="list"></div>
-</div>
+  <h1>3GF – Admin</h1>
+  <div class="tabs" id="tabs"></div>
+  <div id="view"></div>
 
 <script>
 (function(){
-  const $=id=>document.getElementById(id);
-  const st={ event:{}, people:[] };
+  const $ = id => document.getElementById(id);
+  const qs = (sel, el=document) => el.querySelector(sel);
+  const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
 
-  function renderPeople(){
-    const root=$("plist"); root.innerHTML="";
-    st.people.forEach(p=>{
-      const card=document.createElement("div"); card.className="card";
-      card.innerHTML = `<b>${p.name}</b> – ${p.klass||""} ${p.club? "("+p.club+")":""}
-      <div class="actions">
-        <button data-edit="${p.id}">Redigera varv</button>
-        <button data-del="${p.id}">Ta bort deltagare</button>
-      </div>
-      <div class="laps"></div>`;
-      card.querySelector('[data-del]').onclick=()=>{ st.people=st.people.filter(x=>x.id!==p.id); renderPeople(); };
-      card.querySelector('[data-edit]').onclick=()=>{ editLaps(card.querySelector('.laps'), p); };
-      root.appendChild(card);
+  const TABS = ['Spara/Hämta','Lista tävlingar'];
+  let state = { tab:TABS[0] };
+
+  function renderTabs(){
+    const el = $('#tabs'); el.innerHTML='';
+    TABS.forEach(t=>{
+      const b=document.createElement('button'); b.className='tab'+(state.tab===t?' active':''); b.textContent=t; b.onclick=()=>{state.tab=t; render();}; el.appendChild(b);
     });
   }
 
-  function editLaps(container, p){
-    container.innerHTML="";
-    p.laps = p.laps||[];
-    const list=document.createElement("div");
-    p.laps.forEach((v,i)=>{
-      const row=document.createElement("div"); row.style.margin="8px 0"; row.innerHTML=
-        `<div><b>Varv ${i+1}</b></div>
-         <div class="row">
-          <div><label>P tid</label><input value="${v.tP||0}" data-f="tP"></div>
-          <div><label>P miss</label><input value="${v.mP||0}" data-f="mP"></div>
-          <div><label>H tid</label><input value="${v.tH||0}" data-f="tH"></div>
-          <div><label>H miss</label><input value="${v.mH||0}" data-f="mH"></div>
-          <div><label>K tid</label><input value="${v.tG||0}" data-f="tG"></div>
-          <div><label>K miss</label><input value="${v.mG||0}" data-f="mG"></div>
-          <div><label>PT</label><input value="${v.pt||0}" data-f="pt"></div>
-         </div>
-         <div class="actions">
-           <button data-save="${i}">Spara varv</button>
-           <button data-del="${i}">Ta bort varv</button>
-         </div>`;
-      row.querySelector('[data-save]').onclick=()=>{
-        const nv={};
-        row.querySelectorAll('[data-f]').forEach(inp=>{ const k=inp.getAttribute('data-f'); nv[k]=Number(inp.value)||0; });
-        p.laps[i]=nv; alert("Varv sparat");
-      };
-      row.querySelector('[data-del]').onclick=()=>{ p.laps.splice(i,1); editLaps(container,p); };
-      list.appendChild(row);
+  function sKey(id){ return `3gf_state_${id||'local'}`; }
+
+  // Debounce helper
+  function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+  async function apiGet(id){
+    const url = id? `/api/event?id=${encodeURIComponent(id)}` : '/api/event';
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('GET failed');
+    return await r.json();
+  }
+  async function apiPost(id, pin, payload){
+    const r = await fetch(`/api/event?id=${encodeURIComponent(id)}`,{
+      method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-token': pin }, body:JSON.stringify(payload)
     });
-    const add=document.createElement("div"); add.style.marginTop="8px";
-    add.innerHTML = `<div><b>Nytt varv</b></div>
+    if (!r.ok) throw new Error('POST failed');
+    return await r.json();
+  }
+
+  // --- View: Spara/Hämta ---
+  function viewSaveLoad(){
+    const wrap=document.createElement('div'); wrap.className='panel';
+    wrap.innerHTML = `
       <div class="row">
-        <div><label>P tid</label><input data-nf="tP"></div>
-        <div><label>P miss</label><input data-nf="mP"></div>
-        <div><label>H tid</label><input data-nf="tH"></div>
-        <div><label>H miss</label><input data-nf="mH"></div>
-        <div><label>K tid</label><input data-nf="tG"></div>
-        <div><label>K miss</label><input data-nf="mG"></div>
-        <div><label>PT</label><input data-nf="pt"></div>
+        <div><label>Event-ID</label><input id="eventId" placeholder="satila-2025-09-14"></div>
+        <div><label>Admin-PIN</label><input id="adminPin" placeholder="(hemlig PIN)"></div>
+        <div><label>&nbsp;</label><button id="loadLocal">Ladda från denna webbläsare</button></div>
+        <div><label>&nbsp;</label><button id="saveServer">Spara till server</button></div>
       </div>
-      <div class="actions"><button id="addLapBtn">Lägg till varv</button></div>`;
-    add.querySelector('#addLapBtn').onclick=()=>{
-      const nv={}; add.querySelectorAll('[data-nf]').forEach(inp=>{ const k=inp.getAttribute('data-nf'); nv[k]=Number(inp.value)||0; });
-      if(Object.values(nv).every(v=>v===0)) return;
-      p.laps.push(nv); editLaps(container,p);
+      <div class="row">
+        <div><label>Autospara till server (lyssnar på localStorage)</label>
+          <select id="autoSync">
+            <option value="off">Av</option>
+            <option value="on">På</option>
+          </select>
+        </div>
+      </div>
+      <div class="panel" id="status"></div>
+    `;
+
+    const status = qs('#status', wrap);
+    const setStatus = (msg)=>{ status.textContent = msg; };
+
+    qs('#loadLocal', wrap).onclick = async ()=>{
+      const id = qs('#eventId', wrap).value.trim();
+      const raw = localStorage.getItem(sKey(id));
+      if(!raw){ setStatus('Inget lokalt innehåll hittat.'); return; }
+      try{
+        const st = JSON.parse(raw);
+        setStatus(`Lokal data laddad: ${st.people?.length||0} deltagare, ${st.settings?.name||''}`);
+      }catch(e){ setStatus('Fel vid parsning av localStorage.'); }
     };
-    container.appendChild(list); container.appendChild(add);
+
+    qs('#saveServer', wrap).onclick = async ()=>{
+      const id = qs('#eventId', wrap).value.trim();
+      const pin = qs('#adminPin', wrap).value.trim();
+      const raw = localStorage.getItem(sKey(id));
+      if(!raw){ setStatus('Ingen lokal state att spara.'); return; }
+      try{
+        const st = JSON.parse(raw);
+        const payload = { event: {
+          name: st.settings?.name||'',
+          date: st.settings?.date||'',
+          place: st.settings?.place||'',
+          penP: st.settings?.penP||5,
+          penH: st.settings?.penH||5,
+          penG: st.settings?.penG||5
+        }, people: st.people||[] };
+        await apiPost(id, pin, payload);
+        setStatus('Sparat till server.');
+      }catch(e){ setStatus('Kunde inte spara till server. Kontrollera PIN/ID.'); }
+    };
+
+    // Autosync via storage events
+    const debSave = debounce(async ()=>{
+      const id = qs('#eventId', wrap).value.trim();
+      const pin = qs('#adminPin', wrap).value.trim();
+      if(!id || !pin) return; // kräver båda
+      const raw = localStorage.getItem(sKey(id));
+      if(!raw) return;
+      try{
+        const st = JSON.parse(raw);
+        const payload = { event: {
+          name: st.settings?.name||'',
+          date: st.settings?.date||'',
+          place: st.settings?.place||'',
+          penP: st.settings?.penP||5,
+          penH: st.settings?.penH||5,
+          penG: st.settings?.penG||5
+        }, people: st.people||[] };
+        await apiPost(id, pin, payload);
+        setStatus('Autosparat till server.');
+      }catch(e){ /* tyst fel */ }
+    }, 800);
+
+    function storageHandler(ev){
+      const id = qs('#eventId', wrap).value.trim();
+      if(!id) return;
+      if(ev.key === sKey(id) && qs('#autoSync', wrap).value==='on') debSave();
+    }
+
+    window.addEventListener('storage', storageHandler);
+
+    return wrap;
   }
 
-  $("addP").onclick=()=>{
-    const name=$("pName").value.trim(); if(!name) return;
-    st.people.push({id:crypto.randomUUID(), name, club:$("pClub").value.trim(), klass:$("pClass").value.trim(), laps:[]});
-    ["pName","pClub","pClass"].forEach(id=>$(id).value="");
-    renderPeople();
-  };
+  // --- View: Lista tävlingar ---
+  async function viewList(){
+    const wrap=document.createElement('div'); wrap.className='panel';
+    wrap.innerHTML = `
+      <div class="row">
+        <div><label>Admin-PIN</label><input id="adminPin2" placeholder="(hemlig PIN)"></div>
+        <div><label>&nbsp;</label><button id="refresh">Uppdatera lista</button></div>
+      </div>
+      <div class="panel" id="list"></div>
+    `;
 
-  $("load").onclick=async ()=>{
-    const id=$("eventId").value.trim(); if(!id){ alert("Skriv Event-ID"); return; }
-    const res=await fetch(`/api/event?id=${encodeURIComponent(id)}`); if(!res.ok){ alert("Kunde inte ladda"); return; }
-    const data=await res.json();
-    st.event=data.event||{};
-    $("evName").value=st.event.name||""; $("evDate").value=st.event.date||""; $("evPlace").value=st.event.place||"";
-    $("penP").value=st.event.pen_p||2; $("penH").value=st.event.pen_h||2; $("penG").value=st.event.pen_g||2;
-    st.people=(data.people||[]).map(r=>({ id:r.external_id, name:r.name, club:r.club||"", klass:r.class||"", laps:r.laps||[] }));
-    renderPeople();
-  };
+    const list = qs('#list', wrap);
 
-  $("save").onclick=async ()=>{
-    const id=$("eventId").value.trim(); if(!id){ alert("Skriv Event-ID"); return; }
-    const payload={
-      event:{ id, name:$("evName").value.trim(), date:$("evDate").value, place:$("evPlace").value.trim(),
-              penP:Number($("penP").value)||2, penH:Number($("penH").value)||2, penG:Number($("penG").value)||2 },
-      people: st.people
-    };
-    const res=await fetch(`/api/event?id=${encodeURIComponent(id)}`,{method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
-    if(!res.ok){ alert("Kunde inte spara"); return; }
-    alert("Sparat!");
-  };
+    async function loadList(){
+      list.textContent = 'Hämtar...';
+      try{
+        const data = await apiGet();
+        const evts = data.events||[];
+        if (!evts.length){ list.textContent = 'Inga tävlingar i databasen.'; return; }
+        const tbl = document.createElement('table');
+        tbl.innerHTML = `<thead><tr><th>ID</th><th>Namn</th><th>Datum</th><th>Plats</th><th></th></tr></thead><tbody></tbody>`;
+        const tb = tbl.querySelector('tbody');
+        evts.forEach(e=>{
+          const tr=document.createElement('tr');
+          tr.innerHTML = `<td>${e.id}</td><td>${e.name||''}</td><td>${e.date||''}</td><td>${e.place||''}</td><td><button data-id="${e.id}">Öppna</button></td>`;
+          tb.appendChild(tr);
+        });
+        list.innerHTML=''; list.appendChild(tbl);
+        qsa('button[data-id]', list).forEach(b=>{
+          b.onclick = async ()=>{
+            const id = b.getAttribute('data-id');
+            const d = await apiGet(id);
+            alert(`Laddat ${id}: ${d.people?.length||0} deltagare`);
+          };
+        });
+      }catch(e){ list.textContent = 'Kunde inte hämta lista.'; }
+    }
+
+    qs('#refresh', wrap).onclick = loadList;
+    loadList();
+
+    return wrap;
+  }
+
+  async function render(){
+    renderTabs();
+    const v = $('#view'); v.innerHTML='';
+    if (state.tab==='Spara/Hämta') v.appendChild(viewSaveLoad());
+    if (state.tab==='Lista tävlingar') v.appendChild(await viewList());
+  }
+
+  render();
 })();
 </script>
 </body>
