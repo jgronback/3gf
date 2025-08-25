@@ -198,7 +198,6 @@
     root.appendChild(pNew);
 
     // 2) Lista tävlingar
-    const today = todayISO();
     const open = Object.values(events).filter(e=>e.status==='open');
     const closed = Object.values(events).filter(e=>e.status==='closed');
 
@@ -298,7 +297,7 @@
     sw.value = ev.id;
     sw.onchange = ()=> setCurrent(sw.value);
 
-    // Lägg till deltagare (inaktiv om stängd)
+    // Lägg till deltagare (namn krävs + live-disable)
     const add = document.createElement('div'); add.className='panel';
     add.innerHTML = `
       <h3>Lägg till deltagare</h3>
@@ -310,14 +309,27 @@
       <div class="controls">
         <button id="addParticipant"${ev.status!=='open'?' disabled':''}>Lägg till</button>
       </div>
+      <div class="small">Namn är obligatoriskt.</div>
     `;
-    qs('#addParticipant',add).onclick = ()=>{
-      const name = qs('#name',add).value.trim();
+    const nameInput = qs('#name', add);
+    const btnAdd = qs('#addParticipant', add);
+    function updateAddEnabled(){
+      btnAdd.disabled = (ev.status!=='open') || nameInput.value.trim().length===0;
+    }
+    nameInput.addEventListener('input', updateAddEnabled);
+    updateAddEnabled();
+
+    btnAdd.onclick = ()=>{
+      const name = nameInput.value.trim();
+      if (!name){ alert('Ange namn för att lägga till deltagare.'); return; }
       const club = qs('#club',add).value.trim();
       const klass= qs('#klass',add).value.trim();
       const p = { id: uid(), name, club, klass, laps:[] };
       ev.people = [...ev.people, p];
       ev.activeId = p.id;
+      // nollställ inputs + disable knappen igen
+      nameInput.value=''; qs('#club',add).value=''; qs('#klass',add).value='';
+      updateAddEnabled();
       saveAll(); render();
     };
     root.appendChild(add);
@@ -372,13 +384,17 @@
     setBadge();
     sel.onchange=()=>{ ev.activeId=sel.value||null; saveAll(); setBadge(); };
 
-    // Ta bort vald
+    // Ta bort vald (med bekräftelse)
     qs('#removeActive',pane).onclick = ()=>{
       const id = sel.value;
       if (!id) return;
-      const i = ev.people.findIndex(p=>p.id===id);
+      const p = ev.people.find(x=>x.id===id);
+      const namn = p?.name?.trim() || 'den valda deltagaren';
+      if (!confirm(`Ta bort ${namn}? Detta går inte att ångra.`)) return;
+
+      const i = ev.people.findIndex(x=>x.id===id);
       if (i<0) return;
-      ev.people = ev.people.filter(p=>p.id!==id);
+      ev.people = ev.people.filter(x=>x.id!==id);
       if (ev.people.length){
         ev.activeId = ev.people[Math.min(i, ev.people.length-1)].id;
       } else {
