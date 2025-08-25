@@ -5,29 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>3GF – Tävling</title>
   <style>
-    :root{ --bg:#0e1117; --panel:#151a23; --panel2:#10141d; --border:#283043; --ink:#e7ebf4; --muted:#a5b0c4; }
+    :root{ --bg:#0e1117; --panel:#151a23; --panel2:#10141d; --border:#283043; --ink:#e7ebf4; --muted:#a5b0c4; --accent:#3b82f6; }
     *{ box-sizing:border-box; }
-    body{ font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; padding:12px; }
+    body{ font-family:system-ui, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; padding:12px; }
     h1{ font-size:1.2rem; margin:0 0 10px; }
+    h3{ margin:0 0 8px; }
     .tabs{ display:flex; gap:8px; margin-bottom:12px; }
     .tab{ padding:10px 14px; background:var(--panel); border:1px solid var(--border); border-radius:10px; cursor:pointer; }
-    .tab.active{ outline:2px solid #3b82f6; }
+    .tab.active{ outline:2px solid var(--accent); }
     .panel{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:12px; }
     label{ display:block; margin:8px 0 4px; color:var(--muted); }
     input, select, button{ width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel2); color:var(--ink); }
     button{ cursor:pointer; font-weight:600; }
+    button[disabled]{ opacity:.5; cursor:not-allowed; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .row>div{ flex:1; min-width:160px; }
     .right{ text-align:right; }
     table{ width:100%; border-collapse:collapse; margin-top:8px; }
     th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
     .num{ text-align:right; }
+    .list{ display:grid; gap:8px; }
+    .card{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px; }
+    .status{ display:inline-block; padding:3px 8px; border-radius:999px; border:1px solid var(--border); font-size:.85rem; color:var(--muted); }
+    .accent{ color:var(--accent); }
     /* Tävlingsform: tid stor, miss halvbred */
     .pair{ display:flex; gap:10px; }
     .time{ flex:2; }
     .miss{ flex:1; }
     .active-badge{ font-weight:600; background:#1e2a44; padding:6px 10px; border-radius:8px; margin:6px 0 10px; display:inline-block; }
     .controls{ display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+    .small{ font-size:.9rem; color:var(--muted); }
   </style>
 </head>
 <body>
@@ -37,131 +44,282 @@
 
 <script>
 (function(){
-  // Helpers
+  // ------- Helpers -------
   const $  = (id, el=document) => el.getElementById(id);
   const qs = (sel, el=document) => el.querySelector(sel);
   const qsa= (sel, el=document) => Array.from(el.querySelectorAll(sel));
-  const KEY = "3gf_state";                  // Admin läser samma nyckel
+
+  const KEY_EVENTS  = '3gf_events';           // { [eventId]: eventState }
+  const KEY_CURRENT = '3gf_current_event';    // "eventId"
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-
-  // ---- State ----
-  let s = {
-    tab: 'Start',
-    settings: { name:'', date:'', place:'', penP:5, penH:5, penG:5, boards:3 },
-    people: [],
-    activeId: null
+  const todayISO = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const da= String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${da}`;
   };
+  const slugify = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
 
-  // Persist
-  const save = ()=> localStorage.setItem(KEY, JSON.stringify(s));
-  const load = ()=>{
-    const raw = localStorage.getItem(KEY);
-    if (raw) { try { s = JSON.parse(raw); } catch(e){} }
-    // migration: id + activeId
-    (s.people||=[]).forEach(p=>{ if(!p.id) p.id=uid(); if(!Array.isArray(p.laps)) p.laps=[]; });
-    if (!s.activeId && s.people.length) s.activeId = s.people[0].id;
-    // Start ska alltid vara först när man öppnar
-    s.tab = 'Start';
-  };
+  // ------- Data model -------
+  // events = { id: { id, createdAt, status:'open'|'closed', settings:{name,date,place,penP,penH,penG,boards}, people:[{id,name,club,klass,laps:[]},..], activeId } }
+  let events = {};
+  let currentId = null;
 
-  // Tabs
-  const TABS = ['Start','Tävling'];
+  function loadAll(){
+    try { events = JSON.parse(localStorage.getItem(KEY_EVENTS)||'{}')||{}; } catch{ events={}; }
+    currentId = localStorage.getItem(KEY_CURRENT) || null;
+
+    // Auto-migration från gammal 3gf_state (en enda tävling)
+    try{
+      const legacy = localStorage.getItem('3gf_state');
+      if (legacy && Object.keys(events).length===0){
+        const s = JSON.parse(legacy);
+        const id = `import-${Date.now()}`;
+        events[id] = {
+          id,
+          createdAt: new Date().toISOString(),
+          status: 'open',
+          settings: s.settings || { penP:5, penH:5, penG:5, boards:3, name:'', date:'', place:'' },
+          people: (s.people||[]).map(p=>({ id: p.id || uid(), name:p.name||'', club:p.club||'', klass:p.klass||'', laps:p.laps||[] })),
+          activeId: s.activeId || (s.people&&s.people[0]?.id) || null
+        };
+        currentId = id;
+        localStorage.removeItem('3gf_state');
+      }
+    }catch{}
+
+    // Auto-close (datum passerat)
+    const today = todayISO();
+    let changed=false;
+    Object.values(events).forEach(ev=>{
+      const d = ev.settings?.date;
+      if (ev.status==='open' && d && d < today){ ev.status='closed'; changed=true; }
+    });
+    if (changed) saveAll();
+
+    // Säkerställ currentId pekar på en befintlig tävling
+    if (!currentId || !events[currentId]) {
+      const ids = Object.keys(events);
+      currentId = ids.length ? ids.sort((a,b)=> (events[b].createdAt||'').localeCompare(events[a].createdAt||''))[0] : null;
+    }
+  }
+  function saveAll(){
+    localStorage.setItem(KEY_EVENTS, JSON.stringify(events));
+    if (currentId) localStorage.setItem(KEY_CURRENT, currentId); else localStorage.removeItem(KEY_CURRENT);
+  }
+
+  const setCurrent = id => { currentId = id; saveAll(); render(); };
+  const getCurrent = () => currentId ? events[currentId] : null;
+
+  function createEvent(settings){
+    const date = (settings.date||'').trim();
+    const base = slugify(settings.name||'tavling');
+    let id = `${base}${date?'-'+date:''}`;
+    // unik id
+    let i=1;
+    while (events[id]) { id = `${base}${date?'-'+date:''}-${++i}`; }
+    events[id] = {
+      id,
+      createdAt: new Date().toISOString(),
+      status: 'open',
+      settings: {
+        name: settings.name||'',
+        date: date||'',
+        place: settings.place||'',
+        penP: +settings.penP || 0,
+        penH: +settings.penH || 0,
+        penG: +settings.penG || 0,
+        boards: Math.max(1, Math.min(12, +settings.boards || 1))
+      },
+      people: [],
+      activeId: null
+    };
+    currentId = id;
+    saveAll();
+    return id;
+  }
+
+  function labelPerson(p, idx){ return p.name?.trim() ? `${p.name}${p.klass?.trim()?` (${p.klass})`:''}` : `Deltagare ${idx+1}`; }
+
+  // ------- UI scaffolding -------
+  const tabs = ['Start','Tävling'];
+  let activeTab = 'Start';
+
   function renderTabs(){
     const el = $('tabs'); el.innerHTML='';
-    TABS.forEach(t=>{
+    tabs.forEach(t=>{
       const b = document.createElement('button');
-      b.className = 'tab' + (s.tab===t?' active':'');
+      b.className = 'tab' + (activeTab===t?' active':'');
       b.textContent = t;
-      b.onclick = ()=>{ s.tab=t; render(); };
+      b.onclick = ()=>{ activeTab=t; render(); };
       el.appendChild(b);
     });
   }
 
-  // Helpers
-  const getP = id => s.people.find(p=>p.id===id)||null;
-  const label = (p, i) => (p.name?.trim() ? `${p.name}${p.klass?.trim()?` (${p.klass})`:''}` : `Deltagare ${i+1}`);
-
-  function addPersonFromInputs(wrap){
-    const name = qs('#name',wrap).value.trim();
-    const club = qs('#club',wrap).value.trim();
-    const klass= qs('#klass',wrap).value.trim();
-    const p = { id: uid(), name, club, klass, laps:[] };
-    s.people = [...s.people, p];
-    s.activeId = p.id;
-    save(); render();
-  }
-  function removeActive(){
-    if (!s.activeId) return;
-    const i = s.people.findIndex(x=>x.id===s.activeId);
-    s.people = s.people.filter(p=>p.id!==s.activeId);
-    s.activeId = s.people.length ? s.people[Math.min(i, s.people.length-1)].id : null;
-    save(); render();
-  }
-
-  // Start
+  // ------- START VIEW -------
   function viewStart(){
-    const w = document.createElement('div'); w.className='panel';
-    w.innerHTML = `
+    const root = document.createElement('div');
+
+    // 1) Ny tävling
+    const pNew = document.createElement('div'); pNew.className='panel';
+    pNew.innerHTML = `
+      <h3>Ny tävling</h3>
       <div class="row">
-        <div><label>Tävlingens namn (valfritt)</label><input id="evName" value="${s.settings.name||''}"></div>
-        <div><label>Datum (valfritt)</label><input id="evDate" type="date" value="${s.settings.date||''}"></div>
-        <div><label>Plats (valfritt)</label><input id="evPlace" value="${s.settings.place||''}"></div>
+        <div><label>Namn (valfritt)</label><input id="evName"></div>
+        <div><label>Datum</label><input id="evDate" type="date"></div>
+        <div><label>Plats (valfritt)</label><input id="evPlace"></div>
       </div>
       <div class="row">
-        <div><label>Straff Pistol (s/miss)</label><input id="penP" type="number" step="0.01" value="${s.settings.penP}"></div>
-        <div><label>Straff Hagel (s/miss)</label><input id="penH" type="number" step="0.01" value="${s.settings.penH}"></div>
-        <div><label>Straff Karbin (s/miss)</label><input id="penG" type="number" step="0.01" value="${s.settings.penG}"></div>
+        <div><label>Straff Pistol (s/miss)</label><input id="penP" type="number" step="0.01" value="5"></div>
+        <div><label>Straff Hagel (s/miss)</label><input id="penH" type="number" step="0.01" value="5"></div>
+        <div><label>Straff Karbin (s/miss)</label><input id="penG" type="number" step="0.01" value="5"></div>
       </div>
       <div class="row">
-        <div><label>Antal poängtavlor</label><input id="boards" type="number" min="1" max="12" value="${s.settings.boards}"></div>
+        <div><label>Antal poängtavlor</label><input id="boards" type="number" min="1" max="12" value="3"></div>
         <div class="right"><label>&nbsp;</label><button id="startBtn">Starta tävling</button></div>
       </div>
+      <div class="small">Tips: ID skapas automatiskt av namn + datum. Du kan ha flera tävlingar samtidigt.</div>
     `;
-    qs('#startBtn',w).onclick = ()=>{
-      s.settings.name  = qs('#evName',w).value.trim();
-      s.settings.date  = qs('#evDate',w).value.trim();
-      s.settings.place = qs('#evPlace',w).value.trim();
-      s.settings.penP  = +qs('#penP',w).value||0;
-      s.settings.penH  = +qs('#penH',w).value||0;
-      s.settings.penG  = +qs('#penG',w).value||0;
-      s.settings.boards= Math.max(1, Math.min(12, +qs('#boards',w).value||1));
-      s.tab='Tävling'; save(); render();
+    pNew.querySelector('#startBtn').onclick = ()=>{
+      const settings = {
+        name:  qs('#evName',pNew).value.trim(),
+        date:  qs('#evDate',pNew).value.trim(),
+        place: qs('#evPlace',pNew).value.trim(),
+        penP: +qs('#penP',pNew).value||0,
+        penH: +qs('#penH',pNew).value||0,
+        penG: +qs('#penG',pNew).value||0,
+        boards:+qs('#boards',pNew).value||1
+      };
+      if (!settings.date) { alert('Datum krävs för ny tävling.'); return; }
+      const id = createEvent(settings);
+      activeTab='Tävling'; render();
     };
-    return w;
+    root.appendChild(pNew);
+
+    // 2) Lista tävlingar
+    const today = todayISO();
+    const open = Object.values(events).filter(e=>e.status==='open');
+    const closed = Object.values(events).filter(e=>e.status==='closed');
+
+    const pOpen = document.createElement('div'); pOpen.className='panel';
+    pOpen.innerHTML = `<h3>Pågående tävlingar</h3><div class="list" id="openList"></div>`;
+    const ol = qs('#openList',pOpen);
+    if (!open.length){ ol.innerHTML = `<div class="small">Inga pågående.</div>`; }
+    open.sort((a,b)=> (a.settings.date||'').localeCompare(b.settings.date||''));
+    open.forEach(ev=>{
+      const c = document.createElement('div'); c.className='card';
+      c.innerHTML = `
+        <div><b>${ev.settings.name||'(namnlös)'}</b> <span class="small">– ${ev.settings.date||'-'} ${ev.settings.place||''}</span></div>
+        <div class="small">Deltagare: ${ev.people.length}</div>
+        <div class="controls">
+          <button data-open="${ev.id}">Öppna</button>
+          <button data-close="${ev.id}">Stäng</button>
+        </div>
+      `;
+      ol.appendChild(c);
+    });
+    qsa('button[data-open]', pOpen).forEach(b=> b.onclick = ()=>{ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; });
+    qsa('button[data-close]', pOpen).forEach(b=> b.onclick = ()=>{
+      const id = b.getAttribute('data-close');
+      events[id].status='closed'; saveAll(); render();
+    });
+    root.appendChild(pOpen);
+
+    const pClosed = document.createElement('div'); pClosed.className='panel';
+    pClosed.innerHTML = `<h3>Avslutade tävlingar</h3><div class="list" id="closedList"></div>`;
+    const cl = qs('#closedList',pClosed);
+    if (!closed.length){ cl.innerHTML = `<div class="small">Inga avslutade.</div>`; }
+    closed.sort((a,b)=> (b.settings.date||'').localeCompare(a.settings.date||''));
+    closed.forEach(ev=>{
+      const c = document.createElement('div'); c.className='card';
+      c.innerHTML = `
+        <div><b>${ev.settings.name||'(namnlös)'}</b> <span class="small">– ${ev.settings.date||'-'} ${ev.settings.place||''}</span> <span class="status">stängd</span></div>
+        <div class="small">Deltagare: ${ev.people.length}</div>
+        <div class="controls">
+          <button data-open="${ev.id}">Öppna</button>
+          <button data-reopen="${ev.id}">Återöppna</button>
+        </div>
+      `;
+      cl.appendChild(c);
+    });
+    qsa('button[data-open]', pClosed).forEach(b=> b.onclick = ()=>{ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; });
+    qsa('button[data-reopen]', pClosed).forEach(b=> b.onclick = ()=>{
+      const id = b.getAttribute('data-reopen');
+      events[id].status='open'; saveAll(); render();
+    });
+    root.appendChild(pClosed);
+
+    return root;
   }
 
-  // Resultat-beräkning
-  function summarize(){
-    const {penP,penH,penG} = s.settings;
-    return s.people.map((p,i)=>{
+  // ------- Tävlingsvy (per tävling) -------
+  function summarize(ev){
+    const {penP,penH,penG} = ev.settings;
+    return ev.people.map((p,i)=>{
       let base=0, miss=0, laps=0;
       (p.laps||[]).forEach(v=>{
         base += (v.tP||0)+(v.tH||0)+(v.tG||0)+(v.pt||0);
         miss += (v.mP||0)*penP + (v.mH||0)*penH + (v.mG||0)*penG;
         laps++;
       });
-      return { name: label(p,i), club:p.club||'', klass:p.klass||'', laps, total: base+miss };
+      return { name: labelPerson(p,i), club:p.club||'', klass:p.klass||'', laps, total: base+miss };
     }).sort((a,b)=>a.total-b.total);
   }
 
-  // Tävlingsvy (v7.7-flöde)
   function viewRace(){
-    const root = document.createElement('div'); root.className='panel';
+    const ev = getCurrent();
+    const root = document.createElement('div');
+    if (!ev){
+      const p = document.createElement('div'); p.className='panel';
+      p.innerHTML = `<p>Ingen tävling vald. Gå till fliken <b>Start</b> och välj eller skapa en tävling.</p>`;
+      root.appendChild(p);
+      return root;
+    }
 
-    // Lägg till deltagare
+    // Header/status
+    const head = document.createElement('div'); head.className = 'panel';
+    head.innerHTML = `
+      <div class="row">
+        <div><b>${ev.settings.name||'(namnlös)'}</b><br><span class="small">${ev.settings.date||'-'} ${ev.settings.place||''}</span></div>
+        <div><label>Byt tävling</label><select id="switchEv"></select></div>
+        <div class="right"><label>Status</label><div>${ev.status==='open' ? '<span class="status">pågående</span>' : '<span class="status">stängd</span>'}</div></div>
+      </div>
+    `;
+    root.appendChild(head);
+
+    const sw = qs('#switchEv', head);
+    sw.innerHTML='';
+    Object.values(events).sort((a,b)=> (a.settings.date||'').localeCompare(b.settings.date||'')).forEach(E=>{
+      const o = document.createElement('option');
+      o.value = E.id; o.textContent = `${E.settings.date||'-'} – ${E.settings.name||'(namnlös)'}`;
+      sw.appendChild(o);
+    });
+    sw.value = ev.id;
+    sw.onchange = ()=> setCurrent(sw.value);
+
+    // Lägg till deltagare (inaktiv om stängd)
     const add = document.createElement('div'); add.className='panel';
     add.innerHTML = `
-      <h3 style="margin:0 0 8px">Lägg till deltagare</h3>
+      <h3>Lägg till deltagare</h3>
       <div class="row">
         <div><label>Namn</label><input id="name" /></div>
         <div><label>Klubb</label><input id="club" /></div>
         <div><label>Klass</label><input id="klass" /></div>
       </div>
       <div class="controls">
-        <button id="addParticipant">Lägg till</button>
+        <button id="addParticipant"${ev.status!=='open'?' disabled':''}>Lägg till</button>
       </div>
     `;
-    qs('#addParticipant',add).onclick = ()=> addPersonFromInputs(add);
+    qs('#addParticipant',add).onclick = ()=>{
+      const name = qs('#name',add).value.trim();
+      const club = qs('#club',add).value.trim();
+      const klass= qs('#klass',add).value.trim();
+      const p = { id: uid(), name, club, klass, laps:[] };
+      ev.people = [...ev.people, p];
+      ev.activeId = p.id;
+      saveAll(); render();
+    };
     root.appendChild(add);
 
     // Aktiv deltagare + varvformulär
@@ -188,92 +346,98 @@
       </div>
 
       <div class="controls">
-        <button id="saveLap">Spara varv</button>
+        <button id="saveLap"${ev.status!=='open'?' disabled':''}>Spara varv</button>
         <button id="removeActive">Ta bort vald</button>
       </div>
+      <div class="small">“Spara varv” är <span class="accent">inaktiv</span> tills du fyllt i minst ett värde.</div>
     `;
     root.appendChild(pane);
 
     // Fyll select
     const sel = qs('#activeSel',pane);
     sel.innerHTML='';
-    s.people.forEach((p,i)=>{
+    ev.people.forEach((p,i)=>{
       const o=document.createElement('option');
-      o.value=p.id; o.textContent=label(p,i);
+      o.value=p.id; o.textContent=labelPerson(p,i);
       sel.appendChild(o);
     });
-    if (s.activeId && s.people.find(p=>p.id===s.activeId)) sel.value=s.activeId;
+    if (ev.activeId && ev.people.find(p=>p.id===ev.activeId)) sel.value=ev.activeId;
 
     const badge = qs('#activeBadge',pane);
     const setBadge=()=>{
-      const p=getP(sel.value);
-      badge.textContent = p ? (p.name || label(p, s.people.findIndex(x=>x.id===p.id))) : 'Ingen vald';
+      const p=ev.people.find(x=>x.id===sel.value);
+      const idx = ev.people.findIndex(x=>x?.id===sel.value);
+      badge.textContent = p ? (p.name || labelPerson(p, idx)) : 'Ingen vald';
     };
     setBadge();
+    sel.onchange=()=>{ ev.activeId=sel.value||null; saveAll(); setBadge(); };
 
-    sel.onchange=()=>{ s.activeId=sel.value||null; save(); setBadge(); };
-
-    // Handlers
-    qs('#removeActive',pane).onclick = removeActive;
-
-    // >>> SPÄRR: kräver minst ett ifyllt värde innan spar <<<
-    function hasAnyInput(){
-      const vals = [
-        +qs('#tP',pane).value || 0,
-        +qs('#mP',pane).value || 0,
-        +qs('#tH',pane).value || 0,
-        +qs('#mH',pane).value || 0,
-        +qs('#tG',pane).value || 0,
-        +qs('#mG',pane).value || 0,
-        +qs('#ptLap',pane).value || 0
-      ];
-      return vals.some(v => v !== 0);
-    }
-
-    qs('#saveLap',pane).onclick = ()=>{
-      const p = getP(sel.value);
-      if (!p){ alert('Välj deltagare först.'); return; }
-
-      if (!hasAnyInput()){
-        alert('Fyll i minst ett värde (tid, miss eller PT) innan du sparar varvet.');
-        return;
+    // Ta bort vald
+    qs('#removeActive',pane).onclick = ()=>{
+      const id = sel.value;
+      if (!id) return;
+      const i = ev.people.findIndex(p=>p.id===id);
+      if (i<0) return;
+      ev.people = ev.people.filter(p=>p.id!==id);
+      if (ev.people.length){
+        ev.activeId = ev.people[Math.min(i, ev.people.length-1)].id;
+      } else {
+        ev.activeId = null;
       }
+      saveAll(); render();
+    };
 
-      const v = {
+    // --- Live-validering för “Spara varv” ---
+    const btnSave = qs('#saveLap',pane);
+    function readLapVals(){
+      return {
         tP:+qs('#tP',pane).value||0, mP:+qs('#mP',pane).value||0,
         tH:+qs('#tH',pane).value||0, mH:+qs('#mH',pane).value||0,
         tG:+qs('#tG',pane).value||0, mG:+qs('#mG',pane).value||0,
-        pt:+qs('#ptLap',pane).value||0,
-        dtH: Date.now()
+        pt:+qs('#ptLap',pane).value||0
       };
+    }
+    function anyFilled(v){ return Object.values(v).some(n => n !== 0); }
+    function updateSaveEnabled(){
+      if (ev.status!=='open'){ btnSave.disabled = true; return; }
+      const v = readLapVals();
+      btnSave.disabled = !anyFilled(v);
+    }
+    ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(id=>{
+      const el = qs(id, pane); el.addEventListener('input', updateSaveEnabled);
+    });
+    updateSaveEnabled();
+
+    // Spara varv
+    btnSave.onclick = ()=>{
+      const p = ev.people.find(x=>x.id===sel.value);
+      if (!p){ alert('Välj deltagare först.'); return; }
+      const v = readLapVals();
+      if (!anyFilled(v)){ return; } // extra skydd
+      v.dtH = Date.now();
       p.laps = [...(p.laps||[]), v];
-
-      // nollställ
+      // nollställ inputs och disable knappen igen
       ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(id=>{ const el=qs(id, pane); if(el) el.value=''; });
-
+      updateSaveEnabled();
       // hoppa till nästa
-      if (s.people.length>1){
-        const i = s.people.findIndex(x=>x.id===p.id);
-        const nxt = s.people[(i+1)%s.people.length];
-        s.activeId = nxt.id; sel.value = nxt.id; setBadge();
+      if (ev.people.length>1){
+        const i = ev.people.findIndex(x=>x.id===p.id);
+        const nxt = ev.people[(i+1)%ev.people.length];
+        ev.activeId = nxt.id; sel.value = nxt.id; setBadge();
       }
-      save(); render(); // uppdatera resultatlistan
+      saveAll(); render(); // uppdatera resultat
     };
 
     // Resultatlista
     const resultsPanel = document.createElement('div'); resultsPanel.className='panel';
     resultsPanel.innerHTML = `
-      <h3 style="margin:0 0 8px">Resultat</h3>
-      <div class="controls">
-        <button id="exportCSV">Exportera CSV</button>
-        <button id="exportHTML">Snygg utskrift / Export</button>
-      </div>
+      <h3>Resultat</h3>
       <div id="resultsContainer"></div>
     `;
     root.appendChild(resultsPanel);
 
     const cont = qs('#resultsContainer',resultsPanel);
-    const rows = summarize();
+    const rows = summarize(ev);
     const tbl = document.createElement('table');
     tbl.innerHTML = `<thead><tr><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Total (s)</th></tr></thead><tbody></tbody>`;
     const tb = qs('tbody',tbl);
@@ -284,35 +448,21 @@
     });
     cont.innerHTML=''; cont.appendChild(tbl);
 
-    // Export
-    qs('#exportCSV',resultsPanel).onclick = ()=>{
-      const csv = ['Namn,Klubb,Klass,Varv,Total (s)'].concat(
-        rows.map(r=>[r.name,r.club,r.klass,r.laps,r.total.toFixed(2)].map(x=>`"${String(x).replace(/"/g,'""')}"`).join(','))
-      ).join('\n');
-      const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='resultat.csv'; a.click();
-    };
-    qs('#exportHTML',resultsPanel).onclick = ()=>{
-      const w=window.open('','print','width=800,height=900');
-      const html=`<!doctype html><meta charset="utf-8"><title>Resultat</title>
-      <style>body{font-family:system-ui,sans-serif} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ccc;padding:6px;text-align:left} .num{text-align:right}</style>
-      <h2>Resultat</h2>${tbl.outerHTML}`;
-      w.document.write(html); w.document.close(); w.focus();
-    };
-
     return root;
   }
 
-  // Render
+  // ------- Render root -------
   function render(){
     renderTabs();
     const v=$('view'); v.innerHTML='';
-    if (s.tab==='Start') v.appendChild(viewStart());
-    if (s.tab==='Tävling') v.appendChild(viewRace());
+    if (activeTab==='Start') v.appendChild(viewStart());
+    if (activeTab==='Tävling') v.appendChild(viewRace());
   }
 
-  // Init
-  load(); render();
+  // ------- Init -------
+  loadAll();
+  activeTab = 'Start'; // öppna alltid på Start
+  render();
 })();
 </script>
 </body>
