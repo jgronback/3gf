@@ -13,8 +13,6 @@
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .row>div{ flex:1; min-width:220px; }
     .note{ color:#a5b0c4; font-size:.9rem; }
-    table{ width:100%; border-collapse:collapse; }
-    th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
   </style>
 </head>
 <body>
@@ -115,7 +113,6 @@
           penH: st.settings?.penH||0,
           penG: st.settings?.penG||0
         },
-        // Viktigt: klass kommer från r.klass (inte r.class)
         people: (st.people||[]).map(p=>({
           id: p.id, name: p.name||'', club: p.club||'', klass: p.klass||'', laps: p.laps||[]
         }))
