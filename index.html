@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>3GF – v8 Supabase</title>
+<title>3GF – v8 (Säker + Autospara)</title>
 <style>
   :root{ --bg:#0e1117; --panel:#151a23; --panel2:#10141d; --border:#283043; --ink:#e7ebf4; --muted:#a5b0c4; }
-  body{ font-family:system-ui, sans-serif; background:var(--bg); color:var(--ink); margin:0; padding:10px; }
+  *{ box-sizing:border-box; }
+  body{ font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--ink); margin:0; padding:10px; }
   h1{ font-size:1.2rem; margin:0 0 8px; }
   .tabs{ display:flex; gap:8px; margin-bottom:10px; }
-  .tab{ padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--panel2); cursor:pointer; }
+  .tab{ padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--panel2); cursor:pointer; user-select:none; }
   .tab.active{ background:#1e2a44; font-weight:700; }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; }
   label{ display:block; margin-top:8px; font-size:.95rem; }
@@ -18,18 +19,21 @@
   .btn-primary{ background:#1e2a44; }
   .row{ display:flex; gap:10px; flex-wrap:wrap; }
   .row > div{ flex:1; min-width:140px; }
-  .active-badge{ font-weight:700; background:#1e2a44; padding:6px 10px; border-radius:8px; margin-bottom:10px; display:inline-block; }
+  .active-badge{ font-weight:700; background:#1e2a44; padding:6px 10px; border-radius:8px; margin:10px 0; display:inline-block; }
   table{ width:100%; border-collapse:collapse; margin-top:10px; }
   th,td{ border-bottom:1px solid var(--border); padding:6px; text-align:left; }
-  th{ background:var(--panel2); }
+  th{ background:var(--panel2); position:sticky; top:0; }
   .hidden{ display:none !important; }
   .meta{ color:var(--muted); font-size:.9rem; }
   .lapItem{ border:1px dashed var(--border); border-radius:8px; padding:8px; margin:6px 0; background:var(--panel2); }
-  .lapActions{ display:flex; gap:6px; }
+  .lapActions{ display:flex; gap:6px; margin-top:6px; }
+  .status{ font-size:.9rem; color:var(--muted); margin-top:6px; }
+  .status.ok{ color:#79f2c0; }
+  .status.err{ color:#ff9aa2; }
 </style>
 </head>
 <body>
-<h1>3GF – v8 (Säker, via server-API)</h1>
+<h1>3GF – v8 (Säker + Autospara)</h1>
 
 <div class="tabs">
   <div class="tab active" id="tabStart">Start</div>
@@ -41,9 +45,9 @@
   <div class="panel">
     <h3>Grundinställningar</h3>
     <div class="row">
-      <div><label>Miss-straff Pistol (s)</label><input id="penP" type="number" step="0.01" value="5"></div>
-      <div><label>Miss-straff Hagel (s)</label><input id="penH" type="number" step="0.01" value="5"></div>
-      <div><label>Miss-straff Karbin (s)</label><input id="penG" type="number" step="0.01" value="5"></div>
+      <div><label>Miss-straff Pistol (s)</label><input id="penP" type="number" step="0.01" value="2"></div>
+      <div><label>Miss-straff Hagel (s)</label><input id="penH" type="number" step="0.01" value="2"></div>
+      <div><label>Miss-straff Karbin (s)</label><input id="penG" type="number" step="0.01" value="2"></div>
     </div>
     <div class="row">
       <div><label>Tävlingsnamn</label><input id="evName" type="text" placeholder="t.ex. Sätila 3GF Cup"></div>
@@ -51,22 +55,28 @@
       <div><label>Plats</label><input id="evPlace" type="text" placeholder="t.ex. Sätila"></div>
     </div>
     <div class="row">
-      <button id="saveSettings" class="btn-primary">Spara inställningar (lokalt)</button>
+      <button id="saveSettings" class="btn-primary">Spara inställningar</button>
     </div>
     <div class="meta" id="settingsSavedMsg"></div>
   </div>
 
   <div class="panel">
-    <h3>Server (Spara/Ladda till DB)</h3>
+    <h3>Server (DB-koppling)</h3>
     <div class="row">
       <div><label>Event-ID</label><input id="eventId" placeholder="satila-2025-09-14"></div>
-      <div><label>Admin-PIN (för spara)</label><input id="adminPin" placeholder="(din hemliga PIN)"></div>
+      <div><label>Admin-PIN (för skrivning)</label><input id="adminPin" placeholder="(din hemliga PIN)"></div>
     </div>
     <div class="row">
-      <button id="btnLoadServer">Ladda från server</button>
-      <button id="btnSaveServer" class="btn-primary">Spara till server</button>
+      <div>
+        <label><input id="autoSaveServer" type="checkbox" checked> Autospara till server</label>
+        <div class="meta">Event skapas/uppdateras när du sparar inställningarna. Därefter autosparas allt (debounce 2s).</div>
+      </div>
+      <div>
+        <button id="btnLoadServer">Ladda från server</button>
+        <button id="btnSaveServer" class="btn-primary">Spara nu</button>
+      </div>
     </div>
-    <div class="meta">POST kräver korrekt Admin-PIN (jämförs mot serverns <code>ADMIN_TOKEN</code>).</div>
+    <div id="serverStatus" class="status"></div>
   </div>
 </div>
 
@@ -75,7 +85,7 @@
   <div class="panel">
     <h3>Lägg till deltagare</h3>
     <div class="row">
-      <div><label>Namn</label><input id="name" type="text" /></div>
+      <div><label>Namn</label><input id="name" type="text" autocomplete="off" /></div>
       <div><label>Klubb</label><input id="club" type="text" /></div>
       <div><label>Klass</label><input id="klass" type="text" /></div>
     </div>
@@ -88,18 +98,18 @@
     <div id="activeBadge" class="active-badge">Ingen vald</div>
 
     <div class="row">
-      <div><label>Pistol tid</label><input id="tP" type="number" step="0.01" /></div>
-      <div><label>Miss P</label><input id="mP" type="number" /></div>
+      <div><label>Pistol – tid (s)</label><input id="tP" type="number" inputmode="decimal" step="0.01" /></div>
+      <div><label>Miss P</label><input id="mP" type="number" inputmode="numeric" /></div>
     </div>
     <div class="row">
-      <div><label>Hagel tid</label><input id="tH" type="number" step="0.01" /></div>
-      <div><label>Miss H</label><input id="mH" type="number" /></div>
+      <div><label>Hagel – tid (s)</label><input id="tH" type="number" inputmode="decimal" step="0.01" /></div>
+      <div><label>Miss H</label><input id="mH" type="number" inputmode="numeric" /></div>
     </div>
     <div class="row">
-      <div><label>Karbin tid</label><input id="tG" type="number" step="0.01" /></div>
-      <div><label>Miss K</label><input id="mG" type="number" /></div>
+      <div><label>Karbin – tid (s)</label><input id="tG" type="number" inputmode="decimal" step="0.01" /></div>
+      <div><label>Miss K</label><input id="mG" type="number" inputmode="numeric" /></div>
     </div>
-    <div><label>PT detta varv (sek, minus)</label><input id="ptLap" type="number" step="0.01" /></div>
+    <div><label>PT detta varv (sek, minus)</label><input id="ptLap" type="number" inputmode="decimal" step="0.01" /></div>
 
     <div class="row">
       <button id="saveLap" class="btn-primary">Spara varv</button>
@@ -125,6 +135,7 @@
     settings:{penP:2,penH:2,penG:2, evName:"", evDate:"", evPlace:""},
     eventId:"",
     adminPin:"",
+    autoSave:true,
     people:[],  // {id,name,club,klass,laps:[{tP,mP,tH,mH,tG,mG,pt}], sum:{}}
     activeIndex:-1
   };
@@ -163,6 +174,60 @@
     if(s.people.length){ if(s.activeIndex<0) s.activeIndex=0; $("active").value=s.activeIndex; }
   }
 
+  /* ===========================
+     Autosave (debounce + POST)
+     =========================== */
+  function buildPayload(){
+    return {
+      event:{
+        id: s.eventId,
+        name: s.settings.evName,
+        date: s.settings.evDate,
+        place: s.settings.evPlace,
+        penP: s.settings.penP,
+        penH: s.settings.penH,
+        penG: s.settings.penG
+      },
+      people: s.people
+    };
+  }
+
+  function setStatus(msg, ok=false, err=false){
+    const el=$("serverStatus");
+    el.textContent = msg;
+    el.classList.toggle("ok", ok);
+    el.classList.toggle("err", err);
+  }
+
+  async function postToServer(reason=""){
+    if(!s.eventId || !s.adminPin || !s.autoSave) return;
+    try{
+      setStatus("Sparar…");
+      const res = await fetch(`/api/event?id=${encodeURIComponent(s.eventId)}`, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-admin-token": s.adminPin },
+        body: JSON.stringify(buildPayload())
+      });
+      if(!res.ok){
+        const t = await res.text().catch(()=> "");
+        setStatus("Kunde inte spara: " + t, false, true);
+      } else {
+        setStatus("Sparat ✓", true, false);
+        setTimeout(()=> setStatus(""), 1500);
+      }
+    }catch(err){
+      setStatus("Nätverksfel vid sparning", false, true);
+      console.warn("POST fel:", err);
+    }
+  }
+
+  let saveTimer=null;
+  function scheduleAutoSave(reason="ändring"){
+    if(!s.autoSave) return;
+    if(saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(()=> postToServer(reason), 2000);
+  }
+
   // Settings
   function saveSettingsLocal(){
     s.settings.penP = +$("penP").value || 0;
@@ -171,12 +236,21 @@
     s.settings.evName = $("evName").value.trim();
     s.settings.evDate = $("evDate").value;
     s.settings.evPlace= $("evPlace").value.trim();
-    s.eventId = $("eventId").value.trim();
-    s.adminPin = $("adminPin").value.trim(); // används bara för POST
-    try{ localStorage.setItem("gf_v8_secure", JSON.stringify(s)); }catch(e){}
-    $("settingsSavedMsg").textContent="Sparat lokalt."; setTimeout(()=>$("settingsSavedMsg").textContent="",1200);
+    s.eventId  = $("eventId").value.trim();
+    s.adminPin = $("adminPin").value.trim();
+    s.autoSave = !!$("autoSaveServer").checked;
+
+    persistLocal();
+    $("settingsSavedMsg").textContent="Sparat lokalt & skickar till server…";
+    postToServer("saveSettings");
+    setTimeout(()=>{$("settingsSavedMsg").textContent="";}, 1200);
   }
   $("saveSettings").addEventListener("click", saveSettingsLocal);
+  $("autoSaveServer").addEventListener("change", ()=>{
+    s.autoSave = $("autoSaveServer").checked;
+    persistLocal();
+    if(s.autoSave) scheduleAutoSave("toggle on");
+  });
 
   // Participants
   $("addParticipant").addEventListener("click", ()=>{
@@ -185,17 +259,19 @@
     s.people.push(p); s.activeIndex=s.people.length-1;
     ["name","club","klass"].forEach(id=>$(id).value="");
     refreshActive(); render(); persistLocal();
+    scheduleAutoSave("addParticipant");
   });
   $("active").addEventListener("change", ()=>{ s.activeIndex=parseInt($("active").value,10); render(); });
 
-  // Laps
+  // Laps: save / list / edit / delete
   $("saveLap").addEventListener("click", ()=>{
     if(s.activeIndex<0) return;
     const v={ tP:+$("tP").value||0, mP:+$("mP").value||0, tH:+$("tH").value||0, mH:+$("mH").value||0, tG:+$("tG").value||0, mG:+$("mG").value||0, pt:+$("ptLap").value||0 };
-    if(Object.values(v).every(x=>x===0)) return; // skydd mot dubbeltryck
+    if(Object.values(v).every(x=>x===0)) return; // skydd mot dubbeltryck / tomt varv
     s.people[s.activeIndex].laps.push(v);
     ["tP","mP","tH","mH","tG","mG","ptLap"].forEach(id=>$(id).value="");
     render(); persistLocal();
+    scheduleAutoSave("saveLap");
   });
 
   function renderLapList(){
@@ -207,17 +283,20 @@
       const div=document.createElement("div"); div.className="lapItem";
       div.innerHTML=`<div><b>Varv ${i+1}</b> – P: ${to2(dtP)} H: ${to2(dtH)} K: ${to2(dtG)} | PT: ${to2(v.pt||0)} | TT: <b>${to2(tt)}</b></div>
         <div class="lapActions"><button data-edit="${i}">Redigera</button><button data-del="${i}">Ta bort</button></div>`;
+      // Edit
       div.querySelector('[data-edit]').onclick=()=>{
         $("tP").value=v.tP||0; $("mP").value=v.mP||0; $("tH").value=v.tH||0; $("mH").value=v.mH||0; $("tG").value=v.tG||0; $("mG").value=v.mG||0; $("ptLap").value=v.pt||0;
         const handler=()=>{
           const nv={ tP:+$("tP").value||0, mP:+$("mP").value||0, tH:+$("tH").value||0, mH:+$("mH").value||0, tG:+$("tG").value||0, mG:+$("mG").value||0, pt:+$("ptLap").value||0 };
           if(Object.values(nv).every(x=>x===0)){ cleanup(); return; }
           p.laps[i]=nv; ["tP","mP","tH","mH","tG","mG","ptLap"].forEach(id=>$(id).value=""); cleanup(); render(); persistLocal();
+          scheduleAutoSave("editLap");
         };
         const cleanup=()=>{ $("saveLap").removeEventListener("click", handler); $("saveLap").textContent="Spara varv"; };
         cleanup(); $("saveLap").addEventListener("click", handler); $("saveLap").textContent="Spara ändring";
       };
-      div.querySelector('[data-del]').onclick=()=>{ p.laps.splice(i,1); render(); persistLocal(); };
+      // Delete
+      div.querySelector('[data-del]').onclick=()=>{ p.laps.splice(i,1); render(); persistLocal(); scheduleAutoSave("deleteLap"); };
       box.appendChild(div);
     });
   }
@@ -238,7 +317,7 @@
       }).sort((a,b)=>{
         if(a.tt!==b.tt) return a.tt-b.tt;
         if(a.dtP!==b.dtP) return a.dtP-b.dtP;
-        if(a.dtH!==b.dtH) return a.dtH-b.dtH;
+        if(a.dtH!==b.dtH) return a.dtH-b.adH;
         if(a.dtG!==b.dtG) return a.dtG-b.dtG;
         return a.name.localeCompare(b.name);
       });
@@ -290,59 +369,51 @@
     const w=window.open(""); w.document.write(html); w.document.close();
   });
 
-  // Server SAVE / LOAD
-  $("btnSaveServer").addEventListener("click", async ()=>{
-    saveSettingsLocal();
-    if(!s.eventId){ alert("Sätt Event-ID under Start."); return; }
-    const payload = {
-      event: { id:s.eventId, name:s.settings.evName, date:s.settings.evDate, place:s.settings.evPlace,
-               penP:s.settings.penP, penH:s.settings.penH, penG:s.settings.penG },
-      people: s.people
-    };
-    const res = await fetch(`/api/event?id=${encodeURIComponent(s.eventId)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-admin-token": s.adminPin || "" },
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok){ const t=await res.text().catch(()=> ""); alert("Kunde inte spara till server: " + t); return; }
-    alert("Sparat till server.");
-  });
-
+  // Server: GET
   $("btnLoadServer").addEventListener("click", async ()=>{
-    saveSettingsLocal();
-    if(!s.eventId){ alert("Sätt Event-ID under Start."); return; }
-    const res = await fetch(`/api/event?id=${encodeURIComponent(s.eventId)}`);
-    if(!res.ok){ const t=await res.text().catch(()=> ""); alert("Kunde inte ladda från server: " + t); return; }
-    const data = await res.json();
-    if(data.event){
-      s.settings.evName=data.event.name||""; s.settings.evDate=data.event.date||""; s.settings.evPlace=data.event.place||"";
-      s.settings.penP=+data.event.pen_p||2; s.settings.penH=+data.event.pen_h||2; s.settings.penG=+data.event.pen_g||2;
-      $("evName").value=s.settings.evName; $("evDate").value=s.settings.evDate; $("evPlace").value=s.settings.evPlace;
-      $("penP").value=s.settings.penP; $("penH").value=s.settings.penH; $("penG").value=s.settings.penG;
-    } else {
-      // Nollställ om event saknas
-      s.settings.evName=""; s.settings.evDate=""; s.settings.evPlace="";
-      $("evName").value=""; $("evDate").value=""; $("evPlace").value="";
+    if(!$("eventId").value.trim()){ alert("Sätt Event-ID under Start."); return; }
+    s.eventId = $("eventId").value.trim(); persistLocal();
+    setStatus("Laddar…");
+    try{
+      const res = await fetch(`/api/event?id=${encodeURIComponent(s.eventId)}`);
+      if(!res.ok){ const t=await res.text().catch(()=> ""); setStatus("Kunde inte ladda: "+t, false, true); return; }
+      const data = await res.json();
+      if(data.event){
+        s.settings.evName=data.event.name||""; s.settings.evDate=data.event.date||""; s.settings.evPlace=data.event.place||"";
+        s.settings.penP=+data.event.pen_p||2; s.settings.penH=+data.event.pen_h||2; s.settings.penG=+data.event.pen_g||2;
+        $("evName").value=s.settings.evName; $("evDate").value=s.settings.evDate; $("evPlace").value=s.settings.evPlace;
+        $("penP").value=s.settings.penP; $("penH").value=s.settings.penH; $("penG").value=s.settings.penG;
+      } else {
+        s.settings.evName=""; s.settings.evDate=""; s.settings.evPlace="";
+        $("evName").value=""; $("evDate").value=""; $("evPlace").value="";
+      }
+      s.people = (data.people||[]).map(r=>({ id:r.external_id, name:r.name, club:r.club||"", klass:r.klass||"", laps:r.laps||[], sum:{} }));
+      s.activeIndex = s.people.length ? 0 : -1;
+      showComp(); render(); persistLocal();
+      setStatus("Data laddad ✓", true, false);
+      setTimeout(()=> setStatus(""), 1500);
+    }catch(err){
+      setStatus("Nätverksfel vid laddning", false, true);
     }
-    s.people = (data.people||[]).map(r=>({ id:r.external_id, name:r.name, club:r.club||"", klass:r.klass||"", laps:r.laps||[], sum:{} }));
-    s.activeIndex = s.people.length ? 0 : -1;
-    showComp(); render(); persistLocal();
   });
 
-  // Local persistence
-  function persistLocal(){ try{ localStorage.setItem("gf_v8_secure", JSON.stringify(s)); }catch(e){} }
+  // Manuell “Spara nu”
+  $("btnSaveServer").addEventListener("click", ()=> postToServer("manual"));
+
+  // Persistence
+  function persistLocal(){ try{ localStorage.setItem("gf_v8_secure_auto", JSON.stringify(s)); }catch(e){} }
   (function restore(){
     try{
-      const raw=localStorage.getItem("gf_v8_secure"); if(!raw) return;
+      const raw=localStorage.getItem("gf_v8_secure_auto"); if(!raw) return;
       const b=JSON.parse(raw);
-      s.settings=b.settings||s.settings;
-      s.people=b.people||[];
-      s.eventId=b.eventId||"";
-      s.adminPin=b.adminPin||"";
-      s.activeIndex=typeof b.activeIndex==="number" ? b.activeIndex : -1;
+      s.settings=b.settings||s.settings; s.people=b.people||[];
+      s.eventId=b.eventId||""; s.adminPin=b.adminPin||""; s.autoSave= b.autoSave!==false;
+      s.activeIndex=typeof b.activeIndex==="number"? b.activeIndex : -1;
+
       $("penP").value=s.settings.penP; $("penH").value=s.settings.penH; $("penG").value=s.settings.penG;
       $("evName").value=s.settings.evName||""; $("evDate").value=s.settings.evDate||""; $("evPlace").value=s.settings.evPlace||"";
       $("eventId").value=s.eventId||""; $("adminPin").value=s.adminPin||"";
+      $("autoSaveServer").checked = !!s.autoSave;
     }catch(e){}
     if(s.people.length){ showComp(); }
     render();
