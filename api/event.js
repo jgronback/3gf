@@ -1,10 +1,10 @@
 "use strict";
 
 // Vercel Edge/Node function
-// Miljövariabler som används:
+// Miljövariabler:
 // - SUPABASE_URL
 // - SUPABASE_SERVICE_ROLE
-// - ADMIN_TOKEN 
+// - ADMIN_TOKEN
 
 module.exports = async (req, res) => {
   try {
@@ -15,21 +15,17 @@ module.exports = async (req, res) => {
       const id = (req.query.id || "").toString();
       if (!id) return res.status(400).json({ error: "Missing id" });
 
-      // Hämta event
       const { data: evt, error: e1 } = await client
         .from("events")
         .select("id, name, date, place, pen_p, pen_h, pen_g")
         .eq("id", id)
         .single();
+      if (e1 && e1.code !== "PGRST116") throw e1;
 
-      if (e1 && e1.code !== "PGRST116") throw e1; // ignorera "not found"
-
-      // Hämta people
       const { data: ppl, error: e2 } = await client
         .from("people")
         .select("external_id, name, club, klass, laps")
         .eq("event_id", id);
-
       if (e2) throw e2;
 
       return res.json({ event: evt || null, people: ppl || [] });
@@ -47,7 +43,6 @@ module.exports = async (req, res) => {
       const body = req.body || {};
       const ev = body.event || {};
 
-      // Upsert event
       const upEvent = {
         id,
         name: ev.name || null,
@@ -61,7 +56,6 @@ module.exports = async (req, res) => {
       let { error: eUp } = await client.from("events").upsert(upEvent);
       if (eUp) throw eUp;
 
-      // Ersätt people
       const people = (body.people || []).map(p => ({
         event_id: id,
         external_id: p.id,
@@ -73,7 +67,6 @@ module.exports = async (req, res) => {
 
       let { error: eDel } = await client.from("people").delete().eq("event_id", id);
       if (eDel) throw eDel;
-
       if (people.length) {
         let { error: eIns } = await client.from("people").insert(people);
         if (eIns) throw eIns;
