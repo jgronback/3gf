@@ -1,6 +1,6 @@
 "use strict";
 
-// Miljövariabler:
+// Miljövariabler (Vercel):
 // - SUPABASE_URL
 // - SUPABASE_SERVICE_ROLE
 // - ADMIN_TOKEN
@@ -8,26 +8,26 @@
 module.exports = async (req, res) => {
   try {
     const { createClient } = await import("@supabase/supabase-js");
-    const client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE);
+    const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE);
 
     if (req.method === "GET") {
       const id = (req.query.id || "").toString();
       if (!id) return res.status(400).json({ error: "Missing id" });
 
-      const { data: evt, error: e1 } = await client
+      const { data: event, error: e1 } = await supabase
         .from("events")
         .select("id, name, date, place, pen_p, pen_h, pen_g")
         .eq("id", id)
         .single();
       if (e1 && e1.code !== "PGRST116") throw e1;
 
-      const { data: ppl, error: e2 } = await client
+      const { data: people, error: e2 } = await supabase
         .from("people")
         .select("external_id, name, club, klass, laps")
         .eq("event_id", id);
       if (e2) throw e2;
 
-      return res.json({ event: evt || null, people: ppl || [] });
+      return res.json({ event: event || null, people: people || [] });
     }
 
     if (req.method === "POST") {
@@ -41,7 +41,6 @@ module.exports = async (req, res) => {
 
       const body = req.body || {};
       const ev = body.event || {};
-
       const upEvent = {
         id,
         name: ev.name || null,
@@ -52,23 +51,25 @@ module.exports = async (req, res) => {
         pen_g: ev.penG ?? ev.pen_g ?? 0
       };
 
-      let { error: eUp } = await client.from("events").upsert(upEvent);
+      // Upsert event
+      const { error: eUp } = await supabase.from("events").upsert(upEvent);
       if (eUp) throw eUp;
 
-      const peoplePayload = (Array.isArray(body.people) ? body.people : []).map(p => ({
+      // Replace people for this event
+      const people = (Array.isArray(body.people) ? body.people : []).map(p => ({
         event_id: id,
-        external_id: p.id,               // stabilt id från klienten
+        external_id: p.id,
         name: p.name,
         club: p.club || null,
         klass: p.klass || null,
         laps: p.laps || []
       }));
 
-      let { error: eDel } = await client.from("people").delete().eq("event_id", id);
+      const { error: eDel } = await supabase.from("people").delete().eq("event_id", id);
       if (eDel) throw eDel;
 
-      if (peoplePayload.length) {
-        let { error: eIns } = await client.from("people").insert(peoplePayload);
+      if (people.length) {
+        const { error: eIns } = await supabase.from("people").insert(people);
         if (eIns) throw eIns;
       }
 
