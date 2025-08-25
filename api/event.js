@@ -4,7 +4,7 @@
 // Miljövariabler som används:
 // - SUPABASE_URL
 // - SUPABASE_SERVICE_ROLE
-// - ADMIN_TOKEN
+// - ADMIN_TOKEN 
 
 module.exports = async (req, res) => {
   try {
