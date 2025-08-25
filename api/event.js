@@ -1,6 +1,5 @@
 "use strict";
 
-// Vercel Edge/Node function
 // Miljövariabler:
 // - SUPABASE_URL
 // - SUPABASE_SERVICE_ROLE
