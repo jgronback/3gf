@@ -641,131 +641,168 @@
       var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='resultat_'+((ev.settings && ev.settings.date)||'tavling')+'.csv'; a.click();
     };
 
-    // ---- Export: Snygg, detaljerad ----
-    qs('#exportPretty',resultsPanel).onclick = function(){
-      if (!rows.length){ alert('Inget resultat att exportera.'); return; }
-      var penP = ev.settings ? ev.settings.penP : 0;
-      var penH = ev.settings ? ev.settings.penH : 0;
-      var penG = ev.settings ? ev.settings.penG : 0;
+   // ---- Export: Snygg, detaljerad (fixad kolumnlayout) ----
+qs('#exportPretty',resultsPanel).onclick = function(){
+  if (!rows.length){ alert('Inget resultat att exportera.'); return; }
+  var penP = ev.settings ? ev.settings.penP : 0;
+  var penH = ev.settings ? ev.settings.penH : 0;
+  var penG = ev.settings ? ev.settings.penG : 0;
 
-      var w = window.open('','print','width=1000,height=1200');
-      var css = ''
-        + 'body{ font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; color:#111; margin:20px; }'
-        + 'h1{ margin:0 0 2px; font-size:22px; }'
-        + '.meta{ color:#555; margin-bottom:14px; }'
-        + '.lead{ border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; margin:10px 0 16px; }'
-        + '.lead table{ width:100%; border-collapse:collapse; }'
-        + '.lead th, .lead td{ padding:10px 12px; border-bottom:1px solid #eee; }'
-        + '.lead thead th{ background:#f5f7fb; text-align:left; }'
-        + '.num{ text-align:right; }'
-        + '.athlete{ page-break-inside:avoid; margin:14px 0 22px; border:1px solid #e5e7eb; border-radius:12px; }'
-        + '.a-head{ background:#f9fafb; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; }'
-        + '.a-name{ font-weight:700; } .a-meta{ color:#555; font-size:12px; }'
-        + '.laps table{ width:100%; border-collapse:collapse; }'
-        + '.laps th, .laps td{ padding:8px 10px; border-bottom:1px solid #eee; font-size:13px; }'
-        + '.laps thead th{ background:#f5f7fb; }'
-        + '.tot{ padding:10px 12px; background:#fcfcfd; display:flex; gap:12px; justify-content:flex-end; border-top:1px solid #eee; }'
-        + '.pill{ border:1px solid #e5e7eb; border-radius:999px; padding:6px 10px; font-weight:600; }'
-        + '.muted{ color:#666; }'
-        + '@page{ size:A4 portrait; margin:15mm; }';
-      var header = ''
-        + '<h1>' + ((ev.settings && ev.settings.name) || 'Resultat') + '</h1>'
-        + '<div class="meta">'
-        + 'Datum: ' + ((ev.settings && ev.settings.date) || '-') + ' &nbsp;•&nbsp; Plats: ' + ((ev.settings && ev.settings.place) || '-') + '<br>'
-        + 'Straff (s/miss) – Pistol: ' + penP + ', Hagel: ' + penH + ', Karbin: ' + penG
-        + ' &nbsp;•&nbsp; Poängtavlor: ' + ((ev.settings && ev.settings.boards) || 1)
-        + '</div>';
+  var w = window.open('','print','width=1000,height=1200');
+  var css =
+    'body{ font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; color:#111; margin:20px; font-variant-numeric: tabular-nums; }'
+  + 'h1{ margin:0 0 2px; font-size:22px; }'
+  + '.meta{ color:#555; margin-bottom:14px; }'
+  + 'table{ width:100%; border-collapse:collapse; table-layout:fixed; }'
+  + 'th,td{ padding:10px 12px; border-bottom:1px solid #eee; }'
+  + 'thead th{ background:#f5f7fb; text-align:left; }'
+  + 'td.num, th.num{ text-align:right; }'
+  + '.lead{ border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; margin:10px 0 16px; }'
+  + '.athlete{ page-break-inside:avoid; margin:14px 0 22px; border:1px solid #e5e7eb; border-radius:12px; }'
+  + '.a-head{ background:#f9fafb; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; }'
+  + '.a-name{ font-weight:700; } .a-meta{ color:#555; font-size:12px; }'
+  + '.laps th, .laps td{ padding:8px 10px; border-bottom:1px solid #eee; font-size:13px; }'
+  + '.tot{ padding:10px 12px; background:#fcfcfd; display:flex; gap:12px; justify-content:flex-end; border-top:1px solid #eee; }'
+  + '.pill{ border:1px solid #e5e7eb; border-radius:999px; padding:6px 10px; font-weight:600; }'
+  + '.muted{ color:#666; }'
+  + '@page{ size:A4 portrait; margin:15mm; }';
 
-      // Översiktlig tabell (pallplacering)
-      var leadRows = rows.map(function(r,i){
-        return '<tr>'
-          + '<td>'+(i+1)+'</td>'
-          + '<td>'+r.name+'</td>'
-          + '<td>'+r.club+'</td>'
-          + '<td>'+r.klass+'</td>'
-          + '<td class="num">'+r.laps+'</td>'
-          + '<td class="num">'+r.base.toFixed(2)+'</td>'
-          + '<td class="num">'+r.penalty.toFixed(2)+'</td>'
-          + '<td class="num"><b>'+r.total.toFixed(2)+'</b></td>'
-          + '</tr>';
-      }).join('');
+  var header =
+    '<h1>' + ((ev.settings && ev.settings.name) || 'Resultat') + '</h1>'
+  + '<div class="meta">'
+  + 'Datum: ' + ((ev.settings && ev.settings.date) || '-') + ' &nbsp;•&nbsp; Plats: ' + ((ev.settings && ev.settings.place) || '-') + '<br>'
+  + 'Straff (s/miss) – Pistol: ' + penP + ', Hagel: ' + penH + ', Karbin: ' + penG
+  + ' &nbsp;•&nbsp; Poängtavlor: ' + ((ev.settings && ev.settings.boards) || 1)
+  + '</div>';
 
-      var leadTable = ''
-        + '<div class="lead">'
-        + '  <table>'
-        + '    <thead><tr><th>Pl</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Bas (s)</th><th class="num">Straff (s)</th><th class="num">Total (s)</th></tr></thead>'
-        + '    <tbody>'+leadRows+'</tbody>'
-        + '  </table>'
-        + '</div>';
+  // === Översikt ===
+  var leadColgroup =
+    '<colgroup>'
+    + '<col style="width:48px">'        // Pl
+    + '<col>'                            // Namn
+    + '<col style="width:18%">'          // Klubb
+    + '<col style="width:12%">'          // Klass
+    + '<col style="width:70px">'         // Varv
+    + '<col style="width:90px">'         // Bas
+    + '<col style="width:90px">'         // Straff
+    + '<col style="width:100px">'        // Total
+    + '</colgroup>';
 
-      // Detaljer per deltagare
-      function lapCells(v){
-        var base = (+v.tP||0)+(+v.tH||0)+(+v.tG||0)+(+v.pt||0);
-        var pen  = (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
-        var tot  = base+pen;
-        return ''
-          + '<td class="num">'+((+v.tP||0).toFixed(2))+'</td>'
-          + '<td class="num">'+((+v.mP||0))+'</td>'
-          + '<td class="num">'+((+v.tH||0).toFixed(2))+'</td>'
-          + '<td class="num">'+((+v.mH||0))+'</td>'
-          + '<td class="num">'+((+v.tG||0).toFixed(2))+'</td>'
-          + '<td class="num">'+((+v.mG||0))+'</td>'
-          + '<td class="num">'+((+v.pt||0).toFixed(2))+'</td>'
-          + '<td class="num muted">'+base.toFixed(2)+'</td>'
-          + '<td class="num muted">'+pen.toFixed(2)+'</td>'
-          + '<td class="num"><b>'+tot.toFixed(2)+'</b></td>';
-      }
+  var leadHead =
+    '<thead><tr>'
+    + '<th class="num">Pl</th>'
+    + '<th>Namn</th>'
+    + '<th>Klubb</th>'
+    + '<th>Klass</th>'
+    + '<th class="num">Varv</th>'
+    + '<th class="num">Bas (s)</th>'
+    + '<th class="num">Straff (s)</th>'
+    + '<th class="num">Total (s)</th>'
+    + '</tr></thead>';
 
-      var athletes = rows.map(function(r,idx){
-        var p = r._ref;
-        var laps = (p.laps||[]).map(function(v, i){
-          return '<tr><td>#'+(i+1)+'</td>'+lapCells(v)+'</tr>';
-        }).join('');
-        // summera igen för tydlig total
-        var base=0, pen=0; (p.laps||[]).forEach(function(v){
-          base += (+v.tP||0)+(+v.tH||0)+(+v.tG||0)+(+v.pt||0);
-          pen  += (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
-        });
-        var tot = base+pen;
-        return ''
-          + '<div class="athlete">'
-          +   '<div class="a-head">'
-          +     '<div><div class="a-name">'+r.name+'</div>'
-          +     '<div class="a-meta">'+(r.club||'-')+' • '+(r.klass||'-')+'</div></div>'
-          +     '<div class="pill">Plats '+(idx+1)+' • '+tot.toFixed(2)+' s</div>'
-          +   '</div>'
-          +   '<div class="laps">'
-          +     '<table>'
-          +       '<thead><tr>'
-          +         '<th>Varv</th>'
-          +         '<th class="num">P-tid</th><th class="num">Miss P</th>'
-          +         '<th class="num">H-tid</th><th class="num">Miss H</th>'
-          +         '<th class="num">K-tid</th><th class="num">Miss K</th>'
-          +         '<th class="num">PT</th>'
-          +         '<th class="num">Bas</th><th class="num">Straff</th><th class="num">Varv total</th>'
-          +       '</tr></thead>'
-          +       '<tbody>'+laps+'</tbody>'
-          +     '</table>'
-          +   '</div>'
-          +   '<div class="tot">'
-          +     '<div class="pill muted">Bas: '+base.toFixed(2)+' s</div>'
-          +     '<div class="pill muted">Straff: '+pen.toFixed(2)+' s</div>'
-          +     '<div class="pill">Total: '+tot.toFixed(2)+' s</div>'
-          +   '</div>'
-          + '</div>';
-      }).join('');
+  var leadRows = rows.map(function(r,i){
+    return '<tr>'
+      + '<td class="num">'+(i+1)+'</td>'
+      + '<td>'+r.name+'</td>'
+      + '<td>'+r.club+'</td>'
+      + '<td>'+r.klass+'</td>'
+      + '<td class="num">'+r.laps+'</td>'
+      + '<td class="num">'+r.base.toFixed(2)+'</td>'
+      + '<td class="num">'+r.penalty.toFixed(2)+'</td>'
+      + '<td class="num"><b>'+r.total.toFixed(2)+'</b></td>'
+      + '</tr>';
+  }).join('');
 
-      var html = ''
-        + '<!doctype html><meta charset="utf-8"><title>Resultat</title>'
-        + '<style>'+css+'</style>'
-        + header
-        + leadTable
-        + athletes
-        + '<div class="meta">Genererat: ' + (new Date().toLocaleString()) + ' • Event-ID: '+(ev.id||'')+'</div>';
+  var leadTable =
+    '<div class="lead"><table>'
+    + leadColgroup + leadHead
+    + '<tbody>'+leadRows+'</tbody>'
+    + '</table></div>';
 
-      w.document.write(html); w.document.close();
-      setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 300);
-    };
+  // === Detaljer per deltagare ===
+  function lapCells(v){
+    var base = (+v.tP||0)+(+v.tH||0)+(+v.tG||0)+(+v.pt||0);
+    var pen  = (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
+    var tot  = base+pen;
+    return ''
+      + '<td class="num">'+((+v.tP||0).toFixed(2))+'</td>'
+      + '<td class="num">'+((+v.mP||0))+'</td>'
+      + '<td class="num">'+((+v.tH||0).toFixed(2))+'</td>'
+      + '<td class="num">'+((+v.mH||0))+'</td>'
+      + '<td class="num">'+((+v.tG||0).toFixed(2))+'</td>'
+      + '<td class="num">'+((+v.mG||0))+'</td>'
+      + '<td class="num">'+((+v.pt||0).toFixed(2))+'</td>'
+      + '<td class="num muted">'+base.toFixed(2)+'</td>'
+      + '<td class="num muted">'+pen.toFixed(2)+'</td>'
+      + '<td class="num"><b>'+tot.toFixed(2)+'</b></td>';
+  }
+
+  var lapColgroup =
+    '<colgroup>'
+    + '<col style="width:56px">'   // Varv #
+    + '<col style="width:80px">'   // P-tid
+    + '<col style="width:64px">'   // Miss P
+    + '<col style="width:80px">'   // H-tid
+    + '<col style="width:64px">'   // Miss H
+    + '<col style="width:80px">'   // K-tid
+    + '<col style="width:64px">'   // Miss K
+    + '<col style="width:72px">'   // PT
+    + '<col style="width:80px">'   // Bas
+    + '<col style="width:80px">'   // Straff
+    + '<col style="width:96px">'   // Varv total
+    + '</colgroup>';
+
+  var athletes = rows.map(function(r,idx){
+    var p = r._ref || {};
+    var laps = (p.laps||[]).map(function(v, i){
+      return '<tr><td class="num">#'+(i+1)+'</td>'+lapCells(v)+'</tr>';
+    }).join('');
+
+    var base=0, pen=0; (p.laps||[]).forEach(function(v){
+      base += (+v.tP||0)+(+v.tH||0)+(+v.tG||0)+(+v.pt||0);
+      pen  += (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
+    });
+    var tot = base+pen;
+
+    return ''
+      + '<div class="athlete">'
+      +   '<div class="a-head">'
+      +     '<div><div class="a-name">'+r.name+'</div>'
+      +     '<div class="a-meta">'+(r.club||'-')+' • '+(r.klass||'-')+'</div></div>'
+      +     '<div class="pill">Plats '+(idx+1)+' • '+tot.toFixed(2)+' s</div>'
+      +   '</div>'
+      +   '<div class="laps"><table>'
+      +     lapColgroup
+      +     '<thead><tr>'
+      +       '<th class="num">Varv</th>'
+      +       '<th class="num">P-tid</th><th class="num">Miss P</th>'
+      +       '<th class="num">H-tid</th><th class="num">Miss H</th>'
+      +       '<th class="num">K-tid</th><th class="num">Miss K</th>'
+      +       '<th class="num">PT</th>'
+      +       '<th class="num">Bas</th><th class="num">Straff</th><th class="num">Varv total</th>'
+      +     '</tr></thead>'
+      +     '<tbody>'+laps+'</tbody>'
+      +   '</table></div>'
+      +   '<div class="tot">'
+      +     '<div class="pill muted">Bas: '+base.toFixed(2)+' s</div>'
+      +     '<div class="pill muted">Straff: '+pen.toFixed(2)+' s</div>'
+      +     '<div class="pill">Total: '+tot.toFixed(2)+' s</div>'
+      +   '</div>'
+      + '</div>';
+  }).join('');
+
+  var html =
+    '<!doctype html><meta charset="utf-8"><title>Resultat</title>'
+  + '<style>'+css+'</style>'
+  + header
+  + leadTable
+  + athletes
+  + '<div class="meta">Genererat: ' + (new Date().toLocaleString()) + ' • Event-ID: '+(ev.id||'')+'</div>';
+
+  w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 300);
+};
+
 
     return root;
   }
