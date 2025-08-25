@@ -41,7 +41,7 @@
         <button id="loadServer">Hämta från server</button>
       </div>
     </div>
-    <p class="note">Denna sida läser/skriver lokal state från tävlingssidan (via <code>localStorage</code>) och kan spara/hämta samma data till/från servern. Alla deltagare har stabila ID:n.</p>
+    <p class="note">Läser/skriv samma lokala state som tävlingssidan. Alla deltagare har stabila ID:n (<code>id</code> ⇄ <code>external_id</code>).</p>
     <div id="status" class="note"></div>
   </div>
 
@@ -89,9 +89,11 @@
     if (!raw) { setStatus('Ingen lokal state hittad för detta Event-ID.'); renderPreview(null); return; }
     try{
       const st = JSON.parse(raw);
-      // Bakåtkompat: om aktiv saknas men personer finns → välj första
-      if (!st.activeId && Array.isArray(st.people) && st.people.length) {
-        st.activeId = st.people[0].id || null;
+      // migration liten: säkerställ id & activeId
+      if (Array.isArray(st.people)){
+        st.people.forEach(p=>{ if(!p.id) p.id = uid(); if(!Array.isArray(p.laps)) p.laps=[]; });
+        if (!st.activeId && typeof st.activeIndex==='number' && st.people[st.activeIndex]) st.activeId = st.people[st.activeIndex].id;
+        delete st.activeIndex;
       }
       setStatus('Lokal state laddad.'); renderPreview(st);
     }catch{
@@ -118,7 +120,7 @@
           penG: st.settings?.penG||0
         },
         people: (st.people||[]).map(p=>({
-          id: p.id || uid(), // stabilt id
+          id: p.id || uid(),
           name: p.name||'', club: p.club||'', klass: p.klass||'', laps: p.laps||[]
         }))
       };
