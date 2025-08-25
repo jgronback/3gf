@@ -22,7 +22,6 @@
     table{ width:100%; border-collapse:collapse; margin-top:8px; }
     th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
     .num{ text-align:right; }
-
     /* Tävlingsform: tid stor, miss halvbred */
     .pair{ display:flex; gap:10px; }
     .time{ flex:2; }
@@ -149,7 +148,7 @@
   function viewRace(){
     const root = document.createElement('div'); root.className='panel';
 
-    // Lägg till deltagare (enkel panel)
+    // Lägg till deltagare
     const add = document.createElement('div'); add.className='panel';
     add.innerHTML = `
       <h3 style="margin:0 0 8px">Lägg till deltagare</h3>
@@ -217,9 +216,29 @@
     // Handlers
     qs('#removeActive',pane).onclick = removeActive;
 
+    // >>> SPÄRR: kräver minst ett ifyllt värde innan spar <<<
+    function hasAnyInput(){
+      const vals = [
+        +qs('#tP',pane).value || 0,
+        +qs('#mP',pane).value || 0,
+        +qs('#tH',pane).value || 0,
+        +qs('#mH',pane).value || 0,
+        +qs('#tG',pane).value || 0,
+        +qs('#mG',pane).value || 0,
+        +qs('#ptLap',pane).value || 0
+      ];
+      return vals.some(v => v !== 0);
+    }
+
     qs('#saveLap',pane).onclick = ()=>{
       const p = getP(sel.value);
-      if (!p){ alert('Välj deltagare först'); return; }
+      if (!p){ alert('Välj deltagare först.'); return; }
+
+      if (!hasAnyInput()){
+        alert('Fyll i minst ett värde (tid, miss eller PT) innan du sparar varvet.');
+        return;
+      }
+
       const v = {
         tP:+qs('#tP',pane).value||0, mP:+qs('#mP',pane).value||0,
         tH:+qs('#tH',pane).value||0, mH:+qs('#mH',pane).value||0,
@@ -228,8 +247,10 @@
         dtH: Date.now()
       };
       p.laps = [...(p.laps||[]), v];
+
       // nollställ
       ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(id=>{ const el=qs(id, pane); if(el) el.value=''; });
+
       // hoppa till nästa
       if (s.people.length>1){
         const i = s.people.findIndex(x=>x.id===p.id);
