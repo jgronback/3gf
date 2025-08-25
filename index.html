@@ -21,6 +21,7 @@
     .right{ text-align:right; }
     .boards{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
     .chip{ padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--panel2); }
+
     table{ width:100%; border-collapse:collapse; margin-top:8px; }
     th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
     .num{ text-align:right; }
@@ -29,6 +30,7 @@
     .pair{ display:flex; gap:10px; }
     .time{ flex:2; }
     .miss{ flex:1; }
+    .hint{ color:#a5b0c4; font-size:.9rem; }
   </style>
 </head>
 <body>
@@ -42,6 +44,7 @@
   const qs = (sel, el=document) => el.querySelector(sel);
   const qsa= (sel, el=document) => Array.from(el.querySelectorAll(sel));
   const SKEY = id => `3gf_state_${id||'local'}`;
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
   // ---- App state (DB-agnostiskt) ----
   let s = {
@@ -49,23 +52,36 @@
     eventId: 'satila-local',
     settings: { name:'', date:'', place:'', penP:5, penH:5, penG:5, boards:3 },
     people: [],
-    activeId: null // <— stabil ID istället för index
+    activeId: null
   };
 
   // ---- Persist ----
   function persist(){ localStorage.setItem(SKEY(s.eventId), JSON.stringify(s)); }
-  function load(id){
-    const raw = localStorage.getItem(SKEY(id));
-    if (raw) { try { s = JSON.parse(raw); } catch(_){ } }
-    s.eventId = id;
-    // Tvinga Start som första sida om inget igång
-    if (!s.settings || (!s.settings.name && !(s.people&&s.people.length))) s.tab = 'Start';
-    // Säkerställ aktivt ID
+
+  function migrateState(){
+    if (!Array.isArray(s.people)) s.people = [];
+    // Ge ID till de som saknar
+    s.people.forEach(p => { if (!p.id) p.id = uid(); if (!Array.isArray(p.laps)) p.laps = []; });
+    // Konvertera ev. activeIndex => activeId
+    if (!s.activeId && typeof s.activeIndex === 'number' && s.people[s.activeIndex]) {
+      s.activeId = s.people[s.activeIndex].id;
+    }
+    delete s.activeIndex;
+    // Säkerställ aktivId pekar på befintlig person
     if (s.people.length){
       if (!s.activeId || !s.people.find(p=>p.id===s.activeId)) s.activeId = s.people[0].id;
     } else {
       s.activeId = null;
     }
+  }
+
+  function load(id){
+    const raw = localStorage.getItem(SKEY(id));
+    if (raw) { try { s = JSON.parse(raw); } catch(_){ } }
+    s.eventId = id;
+    migrateState();
+    // Start först om inget igång
+    if (!s.settings || (!s.settings.name && s.people.length===0)) s.tab = 'Start';
   }
 
   // ---- Tabs ----
@@ -82,7 +98,6 @@
   }
 
   // ---- Helpers ----
-  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
   const getPerson = (id)=> s.people.find(p=>p.id===id) || null;
   const personLabel = (p, idx) => {
     const nm = (p.name||'').trim();
@@ -91,17 +106,19 @@
   };
 
   function addPerson(){
-    const id = uid();
-    const idx = s.people.length;
-    s.people.push({ id, name:'', club:'', klass:'', laps:[] });
-    s.activeId = id; // välj direkt den nya
+    const p = { id: uid(), name:'', club:'', klass:'', laps:[] };
+    s.people = [...s.people, p];        // immutabelt tillägg för säkerhets skull
+    s.activeId = p.id;                   // välj direkt den nya
     persist(); render();
   }
   function removePerson(id){
     const i = s.people.findIndex(p=>p.id===id);
-    if (i>=0) s.people.splice(i,1);
+    if (i<0) return;
+    const wasActive = (s.activeId === id);
+    s.people = s.people.filter(p=>p.id!==id);
     if (s.people.length){
-      s.activeId = s.people[Math.min(i, s.people.length-1)].id;
+      s.activeId = wasActive ? s.people[Math.min(i, s.people.length-1)].id : s.activeId;
+      if (!s.people.find(p=>p.id===s.activeId)) s.activeId = s.people[0].id;
     } else {
       s.activeId = null;
     }
@@ -143,7 +160,6 @@
       s.settings.penG = +qs('#penG',wrap).value || 0;
       s.settings.boards = Math.max(1, Math.min(12, +qs('#boards',wrap).value || 1));
       persist();
-      if (!s.people.length) { addPerson(); } // se till att något är valt
       s.tab = 'Tävling';
       render();
     };
@@ -182,6 +198,7 @@
       <div>
         <label>Välj deltagare</label>
         <select id="selPerson"></select>
+        <div class="hint">Välj en deltagare och fyll i varv nedan.</div>
       </div>
       <div>
         <label>&nbsp;</label>
@@ -198,11 +215,11 @@
     sel.innerHTML = '';
     s.people.forEach((p,idx)=>{
       const opt = document.createElement('option');
-      opt.value = p.id; // <— värde = stabilt ID
+      opt.value = p.id; // stabilt ID
       opt.textContent = personLabel(p, idx);
       sel.appendChild(opt);
     });
-    if (s.activeId) sel.value = s.activeId;
+    if (s.activeId && s.people.find(p=>p.id===s.activeId)) sel.value = s.activeId;
 
     qs('#addPersonBtn', head).onclick = addPerson;
     qs('#removePersonBtn', head).onclick = ()=>{ if (s.activeId) removePerson(s.activeId); };
@@ -210,31 +227,53 @@
 
     const p = s.activeId ? getPerson(s.activeId) : null;
 
+    // Om inga deltagare än
+    if (!p){
+      const empty = document.createElement('div');
+      empty.className = 'panel';
+      empty.innerHTML = `<p class="hint">Inga deltagare ännu. Klicka <b>Lägg till deltagare</b> för att börja.</p>`;
+      wrap.appendChild(empty);
+
+      // Resultatsammanfattning (tom)
+      const res0 = document.createElement('div');
+      res0.className = 'panel';
+      res0.innerHTML = `<h3 style="margin:0 0 8px">Resultat</h3><p class="hint">Inget att visa ännu.</p>`;
+      wrap.appendChild(res0);
+
+      // Poängtavlor sist
+      const boards0 = document.createElement('div'); boards0.className='boards';
+      for(let i=1;i<= (s.settings.boards||1);i++){
+        const chip=document.createElement('span'); chip.className='chip'; chip.textContent=`Poängtavla ${i}`; boards0.appendChild(chip);
+      }
+      wrap.appendChild(boards0);
+      return wrap;
+    }
+
     // Formulär för vald deltagare
     const form = document.createElement('div');
     form.className = 'panel';
     form.innerHTML = `
       <div class="row">
-        <div><label>Namn</label><input id="p_name" value="${p?.name||''}"></div>
-        <div><label>Klubb</label><input id="p_club" value="${p?.club||''}"></div>
-        <div><label>Klass</label><input id="p_klass" value="${p?.klass||''}"></div>
+        <div><label>Namn</label><input id="p_name" value="${p.name||''}"></div>
+        <div><label>Klubb</label><input id="p_club" value="${p.club||''}"></div>
+        <div><label>Klass</label><input id="p_klass" value="${p.klass||''}"></div>
       </div>
 
       <div class="row">
-        <div><label>PT (poängtid)</label><input id="ptLap" type="number" step="0.01" value=""></div>
+        <div><label>PT (poängtid)</label><input id="ptLap" type="number" step="0.01"></div>
       </div>
 
       <div class="row">
-        <div class="pair time"><div><label>Pistol tid</label><input id="tP" type="number" step="0.01" value=""></div></div>
-        <div class="pair miss"><div><label>Pistol miss</label><input id="mP" type="number" min="0" step="1" value=""></div></div>
+        <div class="pair time"><div><label>Pistol tid</label><input id="tP" type="number" step="0.01"></div></div>
+        <div class="pair miss"><div><label>Pistol miss</label><input id="mP" type="number" min="0" step="1"></div></div>
       </div>
       <div class="row">
-        <div class="pair time"><div><label>Hagel tid</label><input id="tH" type="number" step="0.01" value=""></div></div>
-        <div class="pair miss"><div><label>Hagel miss</label><input id="mH" type="number" min="0" step="1" value=""></div></div>
+        <div class="pair time"><div><label>Hagel tid</label><input id="tH" type="number" step="0.01"></div></div>
+        <div class="pair miss"><div><label>Hagel miss</label><input id="mH" type="number" min="0" step="1"></div></div>
       </div>
       <div class="row">
-        <div class="pair time"><div><label>Gevär tid</label><input id="tG" type="number" step="0.01" value=""></div></div>
-        <div class="pair miss"><div><label>Gevär miss</label><input id="mG" type="number" min="0" step="1" value=""></div></div>
+        <div class="pair time"><div><label>Gevär tid</label><input id="tG" type="number" step="0.01"></div></div>
+        <div class="pair miss"><div><label>Gevär miss</label><input id="mG" type="number" min="0" step="1"></div></div>
       </div>
 
       <div class="row">
@@ -244,56 +283,40 @@
     wrap.appendChild(form);
 
     // Bind personfält (uppdatera bara option-texten för den aktiva)
-    if (p){
-      const updateOptText = ()=>{
-        const opt = qsa('option', sel).find(o=>o.value===p.id);
-        if (!opt) return;
-        const idx = s.people.findIndex(x=>x.id===p.id);
-        opt.textContent = personLabel(p, Math.max(0, idx));
-      };
-      qs('#p_name',form).oninput = e=>{ p.name = e.target.value; persist(); updateOptText(); };
-      qs('#p_club',form).oninput = e=>{ p.club = e.target.value; persist(); };
-      qs('#p_klass',form).oninput= e=>{ p.klass= e.target.value; persist(); updateOptText(); };
-    }
+    const updateOptText = ()=>{
+      const opt = qsa('option', sel).find(o=>o.value===p.id);
+      if (!opt) return;
+      const idx = s.people.findIndex(x=>x.id===p.id);
+      opt.textContent = personLabel(p, Math.max(0, idx));
+    };
+    qs('#p_name',form).oninput = e=>{ p.name = e.target.value; persist(); updateOptText(); };
+    qs('#p_club',form).oninput = e=>{ p.club = e.target.value; persist(); };
+    qs('#p_klass',form).oninput= e=>{ p.klass= e.target.value; persist(); updateOptText(); };
 
     // Lista varv för vald deltagare
     const lapsWrap = document.createElement('div');
     lapsWrap.className = 'panel';
-    lapsWrap.innerHTML = `<h3 style="margin:0 0 8px">Varv – ${p ? (p.name || personLabel(p, s.people.findIndex(x=>x.id===p.id))) : 'Ingen vald'}</h3>
-      <table><thead><tr>
-        <th>#</th><th>PT</th><th class="num">P (t/m)</th><th class="num">H (t/m)</th><th class="num">G (t/m)</th>
-      </tr></thead><tbody></tbody></table>`;
+    lapsWrap.innerHTML = `<h3 style="margin:0 0 8px">Varv – ${p.name || personLabel(p, s.people.findIndex(x=>x.id===p.id))}</h3>
+      <table><thead><tr><th>#</th><th>PT</th><th class="num">P (t/m)</th><th class="num">H (t/m)</th><th class="num">G (t/m)</th></tr></thead><tbody></tbody></table>`;
     const tb = lapsWrap.querySelector('tbody');
-    if (p){
-      const laps = [...(p.laps||[])].sort((a,b)=>{
-        if ((a.dtH||0)!==(b.dtH||0)) return (a.dtH||0)-(b.dtH||0); // FIX: b.dtH
-        return 0;
-      });
-      laps.forEach((v,i)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${i+1}</td>
-          <td>${(v.pt||0).toFixed ? (v.pt||0).toFixed(2) : (v.pt||0)}</td>
-          <td class="num">${(v.tP||0)} / ${(v.mP||0)}</td>
-          <td class="num">${(v.tH||0)} / ${(v.mH||0)}</td>
-          <td class="num">${(v.tG||0)} / ${(v.mG||0)}</td>`;
-        tb.appendChild(tr);
-      });
-    } else {
+    const laps = [...(p.laps||[])].sort((a,b)=>{
+      if ((a.dtH||0)!==(b.dtH||0)) return (a.dtH||0)-(b.dtH||0); // FIX: b.dtH
+      return 0;
+    });
+    laps.forEach((v,i)=>{
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="5">Lägg till en deltagare för att börja.</td>`;
+      tr.innerHTML = `
+        <td>${i+1}</td>
+        <td>${(v.pt||0).toFixed ? (v.pt||0).toFixed(2) : (v.pt||0)}</td>
+        <td class="num">${(v.tP||0)} / ${(v.mP||0)}</td>
+        <td class="num">${(v.tH||0)} / ${(v.mH||0)}</td>
+        <td class="num">${(v.tG||0)} / ${(v.mG||0)}</td>`;
       tb.appendChild(tr);
-    }
+    });
     wrap.appendChild(lapsWrap);
 
     // Spara varv
     qs('#saveLap', form).onclick = ()=>{
-      if (!s.activeId){
-        addPerson();
-      }
-      const p2 = getPerson(s.activeId);
-      if (!p2) return;
-
       const v = {
         tP:+qs('#tP',form).value||0, mP:+qs('#mP',form).value||0,
         tH:+qs('#tH',form).value||0, mH:+qs('#mH',form).value||0,
@@ -301,8 +324,7 @@
         pt:+qs('#ptLap',form).value||0,
         dtH: Date.now()
       };
-      (p2.laps ||= []).push(v);
-
+      p.laps = [...(p.laps||[]), v];
       // Rensa inputs
       ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(sel=>{ const el=qs(sel,form); if(el) el.value=''; });
 
@@ -329,14 +351,10 @@
     });
     wrap.appendChild(res);
 
-    // Poängtavlor visas SIST (efter allt annat)
-    const boards = document.createElement('div');
-    boards.className = 'boards';
+    // Poängtavlor sist
+    const boards = document.createElement('div'); boards.className='boards';
     for(let i=1;i<= (s.settings.boards||1);i++){
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.textContent = `Poängtavla ${i}`;
-      boards.appendChild(chip);
+      const chip=document.createElement('span'); chip.className='chip'; chip.textContent=`Poängtavla ${i}`; boards.appendChild(chip);
     }
     wrap.appendChild(boards);
 
