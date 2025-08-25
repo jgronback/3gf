@@ -30,10 +30,6 @@
       </div>
       <div>
         <label>&nbsp;</label>
-        <button id="loadLocal">Ladda från denna webbläsare</button>
-      </div>
-      <div>
-        <label>&nbsp;</label>
         <button id="saveServer">Spara till server</button>
       </div>
       <div>
@@ -41,7 +37,7 @@
         <button id="loadServer">Hämta från server</button>
       </div>
     </div>
-    <p class="note">Läser/skriv samma lokala state som tävlingssidan. Alla deltagare har stabila ID:n (<code>id</code> ⇄ <code>external_id</code>).</p>
+    <p class="note">Denna sida läser/skriv **samma lokala state** som tävlingssidan (nyckel <code>3gf_state</code>). Deltagares <code>id</code> sparas som <code>external_id</code> i DB.</p>
     <div id="status" class="note"></div>
   </div>
 
@@ -49,22 +45,24 @@
 
 <script>
 (function(){
+  const KEY = '3gf_state';
   const $ = id => document.getElementById(id);
-  const sKey = id => `3gf_state_${id||'local'}`;
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
-  function setStatus(msg){ $('status').textContent = msg; }
+  function setStatus(t){ $('status').textContent = t; }
+  function readLocal(){
+    try { const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; } catch(e){ return null; }
+  }
+  function writeLocal(st){ try { localStorage.setItem(KEY, JSON.stringify(st)); } catch(e){} }
 
   function renderPreview(st){
     const el = $('preview');
-    if (!st) { el.textContent = 'Ingen data att visa.'; return; }
-    const cnt = `
-      <div><b>${st.settings?.name||''}</b> – ${st.settings?.date||''} – ${st.settings?.place||''}</div>
-      <div>Straff: P ${st.settings?.penP||0}s, H ${st.settings?.penH||0}s, G ${st.settings?.penG||0}s. Poängtavlor: ${st.settings?.boards||1}</div>
-      <div>Deltagare: ${st.people?.length||0} st</div>
-      <div>Aktiv: ${st.activeId ? st.people?.find?.(p=>p.id===st.activeId)?.name || '(okänd)' : '(ingen)'}</div>
+    if (!st) { el.textContent = 'Ingen lokal state.'; return; }
+    el.innerHTML = `
+      <div><b>${st.settings?.name||''}</b> ${st.settings?.date||''} ${st.settings?.place||''}</div>
+      <div>Straff: P ${st.settings?.penP||0}s – H ${st.settings?.penH||0}s – K ${st.settings?.penG||0}s. Poängtavlor: ${st.settings?.boards||1}</div>
+      <div>Deltagare: ${st.people?.length||0}</div>
     `;
-    el.innerHTML = cnt;
   }
 
   async function apiGet(id){
@@ -82,68 +80,47 @@
     return await r.json();
   }
 
-  $('loadLocal').onclick = ()=>{
-    const id = $('eventId').value.trim();
-    if (!id) return setStatus('Ange Event-ID.');
-    const raw = localStorage.getItem(sKey(id));
-    if (!raw) { setStatus('Ingen lokal state hittad för detta Event-ID.'); renderPreview(null); return; }
-    try{
-      const st = JSON.parse(raw);
-      // migration liten: säkerställ id & activeId
-      if (Array.isArray(st.people)){
-        st.people.forEach(p=>{ if(!p.id) p.id = uid(); if(!Array.isArray(p.laps)) p.laps=[]; });
-        if (!st.activeId && typeof st.activeIndex==='number' && st.people[st.activeIndex]) st.activeId = st.people[st.activeIndex].id;
-        delete st.activeIndex;
-      }
-      setStatus('Lokal state laddad.'); renderPreview(st);
-    }catch{
-      setStatus('Kunde inte tolka lokal state.'); renderPreview(null);
-    }
-  };
-
+  // Spara lokalt → server
   $('saveServer').onclick = async ()=>{
-    const id = $('eventId').value.trim();
+    const id  = $('eventId').value.trim();
     const pin = $('adminPin').value.trim();
     if (!id || !pin) return setStatus('Ange Event-ID och Admin-PIN.');
-    const raw = localStorage.getItem(sKey(id));
-    if (!raw) return setStatus('Ingen lokal state att spara.');
+    const st = readLocal();
+    if (!st) return setStatus('Ingen lokal state att spara.');
+
+    const payload = {
+      event: {
+        name: st.settings?.name||'',
+        date: st.settings?.date||'',
+        place: st.settings?.place||'',
+        penP: st.settings?.penP||0,
+        penH: st.settings?.penH||0,
+        penG: st.settings?.penG||0
+      },
+      people: (st.people||[]).map(p=>({
+        id: p.id || uid(),
+        name: p.name||'', club: p.club||'', klass: p.klass||'', laps: p.laps||[]
+      }))
+    };
 
     try{
-      const st = JSON.parse(raw);
-      const payload = {
-        event: {
-          name: st.settings?.name||'',
-          date: st.settings?.date||'',
-          place: st.settings?.place||'',
-          penP: st.settings?.penP||0,
-          penH: st.settings?.penH||0,
-          penG: st.settings?.penG||0
-        },
-        people: (st.people||[]).map(p=>({
-          id: p.id || uid(),
-          name: p.name||'', club: p.club||'', klass: p.klass||'', laps: p.laps||[]
-        }))
-      };
       await apiPost(id, pin, payload);
-      setStatus('Sparat till server.'); renderPreview(st);
+      setStatus('Sparat till server.');
+      renderPreview(st);
     }catch(e){
       console.error(e);
-      setStatus('Kunde inte spara till server. Kontrollera PIN/ID.');
+      setStatus('Kunde inte spara – kontrollera PIN/ID.');
     }
   };
 
+  // Hämta server → skriv lokalt (tävlingssidan kan fortsätta därifrån)
   $('loadServer').onclick = async ()=>{
     const id = $('eventId').value.trim();
     if (!id) return setStatus('Ange Event-ID.');
     try{
       const data = await apiGet(id);
-      const people = (data.people||[]).map(r=>({
-        id: r.external_id || uid(),
-        name: r.name||'', club: r.club||'', klass: r.klass||'', laps: r.laps||[]
-      }));
       const st = {
-        tab: 'Tävling',
-        eventId: id,
+        tab: 'Start',
         settings: {
           name: data.event?.name||'',
           date: data.event?.date||'',
@@ -153,16 +130,23 @@
           penG: data.event?.pen_g ?? 0,
           boards: 3
         },
-        people,
-        activeId: people[0]?.id || null
+        people: (data.people||[]).map(r=>({
+          id: r.external_id || uid(),
+          name: r.name||'', club: r.club||'', klass: r.klass||'', laps: r.laps||[]
+        })),
+        activeId: null
       };
-      localStorage.setItem(sKey(id), JSON.stringify(st));
-      setStatus('Hämtat från server och sparat lokalt.'); renderPreview(st);
+      if (st.people.length) st.activeId = st.people[0].id;
+      writeLocal(st);
+      setStatus('Hämtat från server och sparat lokalt.');
+      renderPreview(st);
     }catch(e){
       console.error(e);
       setStatus('Kunde inte hämta från server.');
     }
   };
+
+  renderPreview(readLocal());
 })();
 </script>
 </body>
