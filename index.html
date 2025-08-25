@@ -34,6 +34,8 @@
     .small{ font-size:.9rem; color:var(--muted); }
     .note{ color:#a5b0c4; font-size:.9rem; margin-top:6px; }
     .ok{ color:#7dd3a7; }
+    .live{ display:inline-flex; align-items:center; gap:.5rem; background:#102037; border:1px solid #2a3c61; color:#9ec5ff; padding:6px 10px; border-radius:999px; font-size:.9rem; }
+    .dot{ width:8px; height:8px; border-radius:50%; background:#22c55e; }
   </style>
 </head>
 <body>
@@ -50,7 +52,9 @@
 
   var KEY_EVENTS  = '3gf_events';
   var KEY_CURRENT = '3gf_current_event';
-  var KEY_PIN     = '3gf_admin_pin';     // lagras lokalt när du angett din Admin-PIN en gång (via admin.html eller prompt)
+  var KEY_PIN     = '3gf_admin_pin';
+  var POLL_MS     = 4000;
+
   function uid(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
   function todayISO(){
     var d=new Date(); var y=d.getFullYear(); var m=('0'+(d.getMonth()+1)).slice(-2); var da=('0'+d.getDate()).slice(-2);
@@ -65,21 +69,17 @@
   function setPin(p){ try{ if(p) localStorage.setItem(KEY_PIN, p); }catch(e){} }
 
   // ------- Data model -------
-  // events = { id: { id, createdAt, status:'open'|'closed', settings:{name,date,place,penP,penH,penG,boards}, people:[{id,name,club,klass,laps:[]},..], activeId, _lastSync } }
+  // events = { id: { id, createdAt, status:'open'|'closed', settings:{name,date,place,penP,penH,penG,boards}, people:[{id,name,club,klass,laps:[]},..], activeId, _lastSync, _serverSig } }
   var events = {};
   var currentId = null;
 
-  function objectValues(obj){
-    var out=[], k;
-    for (k in obj){ if (Object.prototype.hasOwnProperty.call(obj,k)) out.push(obj[k]); }
-    return out;
-  }
+  function objectValues(obj){ var out=[], k; for (k in obj){ if (Object.prototype.hasOwnProperty.call(obj,k)) out.push(obj[k]); } return out; }
 
   function loadAll(){
     try { events = JSON.parse(localStorage.getItem(KEY_EVENTS)||'{}')||{}; } catch(e){ events={}; }
     currentId = localStorage.getItem(KEY_CURRENT) || null;
 
-    // Auto-migration från gammal 3gf_state (en enda tävling)
+    // Auto-migration från gammal 3gf_state
     try{
       var legacy = localStorage.getItem('3gf_state');
       if (legacy && Object.keys(events).length===0){
@@ -94,7 +94,8 @@
             return { id: (p && p.id) || uid(), name:(p && p.name)||'', club:(p && p.club)||'', klass:(p && p.klass)||'', laps:(p && p.laps)||[] };
           }),
           activeId: (s && s.activeId) || ((s && s.people && s.people[0] && s.people[0].id) || null),
-          _lastSync: 0
+          _lastSync: 0,
+          _serverSig: ''
         };
         currentId = id;
         localStorage.removeItem('3gf_state');
@@ -110,7 +111,7 @@
     });
     if (changed) saveAll();
 
-    // Säkerställ currentId pekar på en befintlig tävling
+    // currentId sanity
     if (!currentId || !events[currentId]) {
       var ids = Object.keys(events);
       currentId = ids.length ? ids.sort(function(a,b){
@@ -120,7 +121,7 @@
     }
   }
 
-  // ------- Server sync -------
+  // ------- Server sync (POST) -------
   var syncTimers = {}; // id -> timeout
   var syncing    = {}; // id -> bool
 
@@ -140,11 +141,10 @@
     };
   }
 
-  function syncEventNow(id, opts){
-    opts = opts || {};
+  function syncEventNow(id){
     var pin = getPin();
     if (!pin || !id || !events[id]) return;
-    if (syncing[id]) return; // undvik parallella
+    if (syncing[id]) return;
     syncing[id] = true;
 
     var ev = events[id];
@@ -159,15 +159,99 @@
         ev._lastSync = Date.now();
         try{ localStorage.setItem(KEY_EVENTS, JSON.stringify(events)); }catch(e){}
       })
-      .catch(function(e){ /* tyst fail – du kan lägga console.warn(e) här om du vill */ })
+      .catch(function(e){ /* no-op */ })
       .finally ? syncing[id]=false : (syncing[id]=false);
   }
 
   function scheduleSync(id, immediate){
-    if (!getPin()) return; // ingen PIN => ingen autosynk
+    if (!getPin()) return;
     if (!id || !events[id]) return;
     try{ clearTimeout(syncTimers[id]); }catch(e){}
     syncTimers[id] = setTimeout(function(){ syncEventNow(id); }, immediate ? 80 : 800);
+  }
+
+  // ------- Server poll (GET) for LIVE viewers -------
+  var pollTimer = null;
+
+  function normalizeServer(data){
+    // Mappar GET-svar -> vårt format
+    // Stöder både camelCase (penP) och snake_case (pen_p)
+    var ev = {
+      settings: {
+        name:  (data.event && (data.event.name||'')) || '',
+        date:  (data.event && (data.event.date||'')) || '',
+        place: (data.event && (data.event.place||'')) || '',
+        penP:  data.event ? (data.event.penP!=null ? data.event.penP : (data.event.pen_p!=null ? data.event.pen_p : 0)) : 0,
+        penH:  data.event ? (data.event.penH!=null ? data.event.penH : (data.event.pen_h!=null ? data.event.pen_h : 0)) : 0,
+        penG:  data.event ? (data.event.penG!=null ? data.event.penG : (data.event.pen_g!=null ? data.event.pen_g : 0)) : 0,
+        boards: 3
+      },
+      people: (data.people||[]).map(function(r){
+        return {
+          id: r.external_id || r.id || uid(),
+          name: r.name||'',
+          club: r.club||'',
+          klass:r.klass||'',
+          laps: r.laps||[]
+        };
+      })
+    };
+    return ev;
+  }
+
+  function serverSignature(normalized){
+    // litet sig för att se om det hänt något
+    try{
+      return JSON.stringify({
+        s: normalized.settings,
+        p: normalized.people
+      });
+    }catch(e){ return ''; }
+  }
+
+  function applyServerToLocal(id, normalized){
+    if (!events[id]) return;
+    var keepStatus = events[id].status || 'open';
+    var keepCreated= events[id].createdAt || new Date().toISOString();
+    var keepActive = events[id].activeId || null;
+
+    events[id].settings = normalized.settings;
+    events[id].people   = normalized.people;
+    events[id].status   = keepStatus;
+    events[id].createdAt= keepCreated;
+
+    // behåll activeId om den personen finns
+    if (keepActive && events[id].people.some(function(p){return p.id===keepActive;})){
+      events[id].activeId = keepActive;
+    } else {
+      events[id].activeId = events[id].people[0] ? events[id].people[0].id : null;
+    }
+
+    events[id]._serverSig = serverSignature(normalized);
+    saveAll();
+    render(); // uppdatera UI direkt
+  }
+
+  function pollOnce(){
+    if (!currentId) return;
+    // Admin (med PIN) är skrivare -> läs inte tillbaka för att undvika konflikter
+    if (getPin()) return;
+
+    fetch('/api/event?id='+encodeURIComponent(currentId))
+      .then(function(r){ if(!r.ok) throw new Error('GET failed'); return r.json(); })
+      .then(function(data){
+        var norm = normalizeServer(data);
+        var sig  = serverSignature(norm);
+        var curSig = (events[currentId] && events[currentId]._serverSig) || '';
+        // om förändring – applicera
+        if (sig && sig !== curSig){ applyServerToLocal(currentId, norm); }
+      })
+      .catch(function(){ /* nätfel ignoreras */ });
+  }
+
+  function startPolling(){
+    try{ clearInterval(pollTimer); }catch(e){}
+    pollTimer = setInterval(pollOnce, POLL_MS);
   }
 
   // ------- Persistens (lokalt + ev. autosynk) -------
@@ -175,13 +259,13 @@
     try{ localStorage.setItem(KEY_EVENTS, JSON.stringify(events)); }catch(e){}
     if (currentId) {
       try{ localStorage.setItem(KEY_CURRENT, currentId); }catch(e){}
-      scheduleSync(currentId, false); // autosynk (om PIN finns)
+      scheduleSync(currentId, false);
     } else {
       try{ localStorage.removeItem(KEY_CURRENT); }catch(e){}
     }
   }
 
-  function setCurrent(id){ currentId = id; saveAll(); render(); }
+  function setCurrent(id){ currentId = id; saveAll(); render(); pollOnce(); }
   function getCurrent(){ return currentId ? events[currentId] : null; }
 
   function createEvent(settings){
@@ -205,7 +289,8 @@
       },
       people: [],
       activeId: null,
-      _lastSync: 0
+      _lastSync: 0,
+      _serverSig: ''
     };
     currentId = id;
     saveAll();
@@ -252,11 +337,13 @@
       + '  <div><label>Straff Karbin (s/miss)</label><input id="penG" type="number" step="0.01" value="5"></div>'
       + '</div>'
       + '<div class="row">'
-      + '  <div><label>Antal poängtavlor</label><input id="boards" type="number" min="1" max="12" value="1"></div>'
+      + '  <div><label>Antal poängtavlor</label><input id="boards" type="number" min="1" max="12" value="3"></div>'
       + '  <div class="right"><label>&nbsp;</label><button id="startBtn">Starta tävling</button></div>'
       + '</div>'
       + '<div class="small">Tips: ID skapas automatiskt av namn + datum. Du kan ha flera tävlingar samtidigt.</div>'
-      + (getPin() ? '<div class="note"><span class="ok">Autosynk aktiv</span> – ändringar sparas till server.</div>' : '');
+      + (getPin()
+         ? '<div class="note"><span class="ok">Autosynk aktiv</span> – ändringar sparas till server.</div>'
+         : '<div class="note"><span class="live"><span class="dot"></span> Live-läge</span> – denna enhet läser automatiskt från servern.</div>');
     qs('#startBtn', pNew).onclick = function(){
       var settings = {
         name:  qs('#evName',pNew).value.trim(),
@@ -295,18 +382,14 @@
         + '</div>';
       ol.appendChild(c);
     });
-    // Öppna
     qsa('button[data-open]', pOpen).forEach(function(b){ b.onclick = function(){ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; }; });
-    // Stäng (+ säker synk)
     qsa('button[data-close]', pOpen).forEach(function(b){ b.onclick = function(){
       var id = b.getAttribute('data-close');
-      // fråga ev. efter PIN om ingen finns
       if (!getPin()){
         var entered = window.prompt('Ange Admin-PIN för att spara tävlingen till servern (valfritt). Lämna tomt för att bara stänga lokalt:');
         if (entered && entered.trim()){ setPin(entered.trim()); }
       }
       events[id].status='closed'; saveAll();
-      // force-immediate sync om vi har PIN
       if (getPin()) scheduleSync(id, true);
       render();
     }; });
@@ -352,7 +435,7 @@
         miss += (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
         laps++;
       });
-      return { name: labelPerson(p,i), club: p.club||'', klass:p.klass||'', laps:laps, base:base, penalty:miss, total: base+miss };
+      return { name: labelPerson(p,i), club: p.club||'', klass:p.klass||'', laps:laps, base:base, penalty:miss, total: base+miss, _ref:p };
     }).sort(function(a,b){ return a.total-b.total; });
   }
 
@@ -376,7 +459,9 @@
       +   '<div><label>Byt tävling</label><select id="switchEv"></select></div>'
       +   '<div class="right"><label>Status</label><div>' + (ev.status==='open' ? '<span class="status">pågående</span>' : '<span class="status">stängd</span>') + '</div></div>'
       + '</div>'
-      + (getPin() ? '<div class="note"><span class="ok">Autosynk aktiv</span> för denna enhet.</div>' : '');
+      + (getPin()
+         ? '<div class="note"><span class="ok">Autosynk aktiv</span> för denna enhet.</div>'
+         : '<div class="note"><span class="live"><span class="dot"></span> Live-läge</span> – hämtar ändringar var 4:e sekund.</div>');
     root.appendChild(head);
 
     var sw = qs('#switchEv', head);
@@ -394,7 +479,7 @@
     sw.value = ev.id;
     sw.onchange = function(){ setCurrent(sw.value); };
 
-    // Lägg till deltagare (namn krävs + live-disable)
+    // Lägg till deltagare
     var add = document.createElement('div'); add.className='panel';
     add.innerHTML = ''
       + '<h3>Lägg till deltagare</h3>'
@@ -409,11 +494,8 @@
       + '<div class="small">Namn är obligatoriskt.</div>';
     var nameInput = qs('#name', add);
     var btnAdd = qs('#addParticipant', add);
-    function updateAddEnabled(){
-      btnAdd.disabled = (ev.status!=='open') || nameInput.value.trim().length===0;
-    }
-    nameInput.addEventListener('input', updateAddEnabled);
-    updateAddEnabled();
+    function updateAddEnabled(){ btnAdd.disabled = (ev.status!=='open') || nameInput.value.trim().length===0; }
+    nameInput.addEventListener('input', updateAddEnabled); updateAddEnabled();
 
     btnAdd.onclick = function(){
       var name = nameInput.value.trim();
@@ -425,8 +507,7 @@
       ev.activeId = p.id;
       nameInput.value=''; qs('#club',add).value=''; qs('#klass',add).value='';
       updateAddEnabled();
-      saveAll(); // autosynk triggas
-      render();
+      saveAll(); render();
     };
     root.appendChild(add);
 
@@ -436,7 +517,6 @@
       + '<label>Aktiv deltagare</label>'
       + '<select id="activeSel"></select>'
       + '<div id="activeBadge" class="active-badge">Ingen vald</div>'
-
       + '<div class="row">'
       + '  <div class="time"><div><label>Pistol tid</label><input id="tP" type="number" step="0.01"></div></div>'
       + '  <div class="miss"><div><label>Miss P</label><input id="mP" type="number" min="0" step="1"></div></div>'
@@ -452,7 +532,6 @@
       + '<div class="row">'
       + '  <div><label>PT detta varv</label><input id="ptLap" type="number" step="0.01"></div>'
       + '</div>'
-
       + '<div class="controls">'
       + '  <button id="saveLap"' + (ev.status!=='open'?' disabled':'') + '>Spara varv</button>'
       + '  <button id="removeActive">Ta bort vald</button>'
@@ -460,13 +539,10 @@
       + '<div class="small">“Spara varv” är <span class="accent">inaktiv</span> tills du fyllt i minst ett värde.</div>';
     root.appendChild(pane);
 
-    // Fyll select
     var sel = qs('#activeSel',pane);
     sel.innerHTML='';
     (ev.people||[]).forEach(function(p,i){
-      var o=document.createElement('option');
-      o.value=p.id; o.textContent=labelPerson(p,i);
-      sel.appendChild(o);
+      var o=document.createElement('option'); o.value=p.id; o.textContent=labelPerson(p,i); sel.appendChild(o);
     });
     if (ev.activeId && (ev.people||[]).some(function(p){ return p.id===ev.activeId; })) sel.value=ev.activeId;
 
@@ -479,7 +555,6 @@
     setBadge();
     sel.onchange=function(){ ev.activeId=sel.value||null; saveAll(); setBadge(); };
 
-    // Ta bort vald (med bekräftelse)
     qs('#removeActive',pane).onclick = function(){
       var id = sel.value;
       if (!id) return;
@@ -487,17 +562,11 @@
       (ev.people||[]).forEach(function(x,ix){ if (x && x.id===id){ found=x; i=ix; }});
       var namn = (found && found.name && found.name.trim()) || 'den valda deltagaren';
       if (!confirm('Ta bort ' + namn + '? Detta går inte att ångra.')) return;
-
       ev.people = (ev.people||[]).filter(function(x){ return x.id!==id; });
-      if ((ev.people||[]).length){
-        ev.activeId = ev.people[Math.min(i, ev.people.length-1)].id;
-      } else {
-        ev.activeId = null;
-      }
+      ev.activeId = (ev.people||[]).length ? ev.people[Math.min(i, ev.people.length-1)].id : null;
       saveAll(); render();
     };
 
-    // --- Live-validering för “Spara varv” ---
     var btnSave = qs('#saveLap',pane);
     function readLapVals(){
       return {
@@ -510,15 +579,13 @@
     function anyFilled(v){ for (var k in v){ if (v[k]!==0) return true; } return false; }
     function updateSaveEnabled(){
       if (ev.status!=='open'){ btnSave.disabled = true; return; }
-      var v = readLapVals();
-      btnSave.disabled = !anyFilled(v);
+      var v = readLapVals(); btnSave.disabled = !anyFilled(v);
     }
     ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(function(id){
       var el = qs(id, pane); el.addEventListener('input', updateSaveEnabled);
     });
     updateSaveEnabled();
 
-    // Spara varv
     btnSave.onclick = function(){
       var p=null, i=-1;
       (ev.people||[]).forEach(function(x,ix){ if (x && x.id===sel.value){ p=x; i=ix; }});
@@ -535,11 +602,10 @@
         var nxt = ev.people[(i+1)%ev.people.length];
         ev.activeId = nxt.id; sel.value = nxt.id; setBadge();
       }
-      saveAll(); // autosynk triggas
-      render();
+      saveAll(); render();
     };
 
-    // Resultatlista + EXPORT
+    // Resultat + EXPORT
     var resultsPanel = document.createElement('div'); resultsPanel.className='panel';
     resultsPanel.innerHTML = ''
       + '<h3>Resultat</h3>'
@@ -562,7 +628,7 @@
     });
     cont.innerHTML=''; cont.appendChild(tbl);
 
-    // ---- Export: CSV ----
+    // ---- Export: CSV (översikt) ----
     qs('#exportCSV',resultsPanel).onclick = function(){
       if (!rows.length){ alert('Inget resultat att exportera.'); return; }
       var header = ['Placering','Namn','Klubb','Klass','Varv','Bas (s)','Straff (s)','Total (s)'];
@@ -576,51 +642,129 @@
       var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='resultat_'+((ev.settings && ev.settings.date)||'tavling')+'.csv'; a.click();
     };
 
-    // ---- Export: Snygg utskrift ----
+    // ---- Export: Snygg, detaljerad ----
     qs('#exportPretty',resultsPanel).onclick = function(){
       if (!rows.length){ alert('Inget resultat att exportera.'); return; }
-      var w = window.open('','print','width=900,height=1100');
+      var penP = ev.settings ? ev.settings.penP : 0;
+      var penH = ev.settings ? ev.settings.penH : 0;
+      var penG = ev.settings ? ev.settings.penG : 0;
+
+      var w = window.open('','print','width=1000,height=1200');
       var css = ''
-        + 'body{ font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; margin:20px; color:#111; }'
-        + 'h1{ margin:0 0 6px; font-size:22px; }'
-        + '.meta{ color:#555; margin-bottom:12px; }'
-        + 'table{ width:100%; border-collapse:collapse; }'
-        + 'th,td{ padding:8px 10px; border-bottom:1px solid #ddd; }'
-        + 'thead th{ background:#f5f7fb; text-align:left; }'
-        + 'td.num, th.num{ text-align:right; width:100px; }'
-        + 'tr:nth-child(even) td{ background:#fafafa; }'
-        + '.footer{ margin-top:14px; color:#555; font-size:12px; }'
-        + '@page{ size: A4 portrait; margin:15mm; }';
+        + 'body{ font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; color:#111; margin:20px; }'
+        + 'h1{ margin:0 0 2px; font-size:22px; }'
+        + '.meta{ color:#555; margin-bottom:14px; }'
+        + '.lead{ border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; margin:10px 0 16px; }'
+        + '.lead table{ width:100%; border-collapse:collapse; }'
+        + '.lead th, .lead td{ padding:10px 12px; border-bottom:1px solid #eee; }'
+        + '.lead thead th{ background:#f5f7fb; text-align:left; }'
+        + '.num{ text-align:right; }'
+        + '.athlete{ page-break-inside:avoid; margin:14px 0 22px; border:1px solid #e5e7eb; border-radius:12px; }'
+        + '.a-head{ background:#f9fafb; padding:10px 12px; display:flex; justify-content:space-between; align-items:center; }'
+        + '.a-name{ font-weight:700; } .a-meta{ color:#555; font-size:12px; }'
+        + '.laps table{ width:100%; border-collapse:collapse; }'
+        + '.laps th, .laps td{ padding:8px 10px; border-bottom:1px solid #eee; font-size:13px; }'
+        + '.laps thead th{ background:#f5f7fb; }'
+        + '.tot{ padding:10px 12px; background:#fcfcfd; display:flex; gap:12px; justify-content:flex-end; border-top:1px solid #eee; }'
+        + '.pill{ border:1px solid #e5e7eb; border-radius:999px; padding:6px 10px; font-weight:600; }'
+        + '.muted{ color:#666; }'
+        + '@page{ size:A4 portrait; margin:15mm; }';
       var header = ''
         + '<h1>' + ((ev.settings && ev.settings.name) || 'Resultat') + '</h1>'
         + '<div class="meta">'
         + 'Datum: ' + ((ev.settings && ev.settings.date) || '-') + ' &nbsp;•&nbsp; Plats: ' + ((ev.settings && ev.settings.place) || '-') + '<br>'
-        + 'Straff (s/miss) – Pistol: ' + (ev.settings ? ev.settings.penP||0 : 0) + ', Hagel: ' + (ev.settings ? ev.settings.penH||0 : 0) + ', Karbin: ' + (ev.settings ? ev.settings.penG||0 : 0)
+        + 'Straff (s/miss) – Pistol: ' + penP + ', Hagel: ' + penH + ', Karbin: ' + penG
+        + ' &nbsp;•&nbsp; Poängtavlor: ' + ((ev.settings && ev.settings.boards) || 1)
         + '</div>';
-      var rowsHtml = rows.map(function(r,i){
-        return ''
-          + '<tr>'
-          +   '<td>'+(i+1)+'</td>'
-          +   '<td>'+r.name+'</td>'
-          +   '<td>'+r.club+'</td>'
-          +   '<td>'+r.klass+'</td>'
-          +   '<td class="num">'+r.laps+'</td>'
-          +   '<td class="num">'+r.base.toFixed(2)+'</td>'
-          +   '<td class="num">'+r.penalty.toFixed(2)+'</td>'
-          +   '<td class="num"><b>'+r.total.toFixed(2)+'</b></td>'
+
+      // Översiktlig tabell (pallplacering)
+      var leadRows = rows.map(function(r,i){
+        return '<tr>'
+          + '<td>'+(i+1)+'</td>'
+          + '<td>'+r.name+'</td>'
+          + '<td>'+r.club+'</td>'
+          + '<td>'+r.klass+'</td>'
+          + '<td class="num">'+r.laps+'</td>'
+          + '<td class="num">'+r.base.toFixed(2)+'</td>'
+          + '<td class="num">'+r.penalty.toFixed(2)+'</td>'
+          + '<td class="num"><b>'+r.total.toFixed(2)+'</b></td>'
           + '</tr>';
       }).join('');
+
+      var leadTable = ''
+        + '<div class="lead">'
+        + '  <table>'
+        + '    <thead><tr><th>Pl</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Bas (s)</th><th class="num">Straff (s)</th><th class="num">Total (s)</th></tr></thead>'
+        + '    <tbody>'+leadRows+'</tbody>'
+        + '  </table>'
+        + '</div>';
+
+      // Detaljer per deltagare
+      function lapCells(v){
+        var base = (+v.tP||0)+(+v.tH||0)+(+v.tG||0)+(+v.pt||0);
+        var pen  = (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
+        var tot  = base+pen;
+        return ''
+          + '<td class="num">'+((+v.tP||0).toFixed(2))+'</td>'
+          + '<td class="num">'+((+v.mP||0))+'</td>'
+          + '<td class="num">'+((+v.tH||0).toFixed(2))+'</td>'
+          + '<td class="num">'+((+v.mH||0))+'</td>'
+          + '<td class="num">'+((+v.tG||0).toFixed(2))+'</td>'
+          + '<td class="num">'+((+v.mG||0))+'</td>'
+          + '<td class="num">'+((+v.pt||0).toFixed(2))+'</td>'
+          + '<td class="num muted">'+base.toFixed(2)+'</td>'
+          + '<td class="num muted">'+pen.toFixed(2)+'</td>'
+          + '<td class="num"><b>'+tot.toFixed(2)+'</b></td>';
+      }
+
+      var athletes = rows.map(function(r,idx){
+        var p = r._ref;
+        var laps = (p.laps||[]).map(function(v, i){
+          return '<tr><td>#'+(i+1)+'</td>'+lapCells(v)+'</tr>';
+        }).join('');
+        // summera igen för tydlig total
+        var base=0, pen=0; (p.laps||[]).forEach(function(v){
+          base += (+v.tP||0)+(+v.tH||0)+(+v.tG||0)+(+v.pt||0);
+          pen  += (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
+        });
+        var tot = base+pen;
+        return ''
+          + '<div class="athlete">'
+          +   '<div class="a-head">'
+          +     '<div><div class="a-name">'+r.name+'</div>'
+          +     '<div class="a-meta">'+(r.club||'-')+' • '+(r.klass||'-')+'</div></div>'
+          +     '<div class="pill">Plats '+(idx+1)+' • '+tot.toFixed(2)+' s</div>'
+          +   '</div>'
+          +   '<div class="laps">'
+          +     '<table>'
+          +       '<thead><tr>'
+          +         '<th>Varv</th>'
+          +         '<th class="num">P-tid</th><th class="num">Miss P</th>'
+          +         '<th class="num">H-tid</th><th class="num">Miss H</th>'
+          +         '<th class="num">K-tid</th><th class="num">Miss K</th>'
+          +         '<th class="num">PT</th>'
+          +         '<th class="num">Bas</th><th class="num">Straff</th><th class="num">Varv total</th>'
+          +       '</tr></thead>'
+          +       '<tbody>'+laps+'</tbody>'
+          +     '</table>'
+          +   '</div>'
+          +   '<div class="tot">'
+          +     '<div class="pill muted">Bas: '+base.toFixed(2)+' s</div>'
+          +     '<div class="pill muted">Straff: '+pen.toFixed(2)+' s</div>'
+          +     '<div class="pill">Total: '+tot.toFixed(2)+' s</div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+
       var html = ''
         + '<!doctype html><meta charset="utf-8"><title>Resultat</title>'
         + '<style>'+css+'</style>'
         + header
-        + '<table>'
-        + '  <thead><tr><th>Pl</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Bas (s)</th><th class="num">Straff (s)</th><th class="num">Total (s)</th></tr></thead>'
-        + '  <tbody>'+rowsHtml+'</tbody>'
-        + '</table>'
-        + '<div class="footer">Genererat: ' + (new Date().toLocaleString()) + ' • Poängtavlor: ' + ((ev.settings && ev.settings.boards) || 1) + '</div>';
-      w.document.write(html);
-      w.document.close();
+        + leadTable
+        + athletes
+        + '<div class="meta">Genererat: ' + (new Date().toLocaleString()) + ' • Event-ID: '+(ev.id||'')+'</div>';
+
+      w.document.write(html); w.document.close();
       setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 300);
     };
 
@@ -640,8 +784,11 @@
   activeTab = 'Start';
   render();
 
-  // Säkerställ att sync körs även om sidan är öppen länge
+  // Polla servern regelbundet för live-visning
+  startPolling();
+  // Se till att admin-synk tickar ibland
   setInterval(function(){ if (currentId && getPin()) scheduleSync(currentId, false); }, 15000);
+
 })();
 </script>
 </body>
