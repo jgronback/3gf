@@ -28,10 +28,7 @@
     .card{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px; }
     .status{ display:inline-block; padding:3px 8px; border-radius:999px; border:1px solid var(--border); font-size:.85rem; color:var(--muted); }
     .accent{ color:var(--accent); }
-    /* Tävlingsform: tid stor, miss halvbred */
-    .pair{ display:flex; gap:10px; }
-    .time{ flex:2; }
-    .miss{ flex:1; }
+    .pair{ display:flex; gap:10px; } .time{ flex:2; } .miss{ flex:1; }
     .active-badge{ font-weight:600; background:#1e2a44; padding:6px 10px; border-radius:8px; margin:6px 0 10px; display:inline-block; }
     .controls{ display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
     .small{ font-size:.9rem; color:var(--muted); }
@@ -49,8 +46,8 @@
   const qs = (sel, el=document) => el.querySelector(sel);
   const qsa= (sel, el=document) => Array.from(el.querySelectorAll(sel));
 
-  const KEY_EVENTS  = '3gf_events';           // { [eventId]: eventState }
-  const KEY_CURRENT = '3gf_current_event';    // "eventId"
+  const KEY_EVENTS  = '3gf_events';
+  const KEY_CURRENT = '3gf_current_event';
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
   const todayISO = () => {
     const d = new Date();
@@ -327,7 +324,6 @@
       const p = { id: uid(), name, club, klass, laps:[] };
       ev.people = [...ev.people, p];
       ev.activeId = p.id;
-      // nollställ inputs + disable knappen igen
       nameInput.value=''; qs('#club',add).value=''; qs('#klass',add).value='';
       updateAddEnabled();
       saveAll(); render();
@@ -432,16 +428,14 @@
       if (!anyFilled(v)){ return; } // extra skydd
       v.dtH = Date.now();
       p.laps = [...(p.laps||[]), v];
-      // nollställ inputs och disable knappen igen
       ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(id=>{ const el=qs(id, pane); if(el) el.value=''; });
       updateSaveEnabled();
-      // hoppa till nästa
       if (ev.people.length>1){
         const i = ev.people.findIndex(x=>x.id===p.id);
         const nxt = ev.people[(i+1)%ev.people.length];
         ev.activeId = nxt.id; sel.value = nxt.id; setBadge();
       }
-      saveAll(); render(); // uppdatera resultat
+      saveAll(); render();
     };
 
     // Resultatlista + EXPORT
@@ -518,41 +512,4 @@
         </tr>
       `).join('');
       const html = `
-        <!doctype html><meta charset="utf-8"><title>Resultat</title>
-        <style>${css}</style>
-        ${header}
-        <table>
-          <thead>
-            <tr><th>Pl</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Bas (s)</th><th class="num">Straff (s)</th><th class="num">Total (s)</th></tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-        <div class="footer">
-          Genererat: ${new Date().toLocaleString()} • Poängtavlor: ${ev.settings.boards||1}
-        </div>
-      `;
-      w.document.write(html);
-      w.document.close();
-      // Trigger utskrift UTAN inline <script> i strängen (fix för </script>-buggen)
-      setTimeout(()=>{ try{ w.focus(); w.print(); }catch(_){} }, 300);
-    };
-
-    return root;
-  }
-
-  // ------- Render root -------
-  function render(){
-    renderTabs();
-    const v=$('view'); v.innerHTML='';
-    if (activeTab==='Start') v.appendChild(viewStart());
-    if (activeTab==='Tävling') v.appendChild(viewRace());
-  }
-
-  // ------- Init -------
-  loadAll();
-  activeTab = 'Start'; // öppna alltid på Start
-  render();
-})();
-</script>
-</body>
-</html>
+        <!doctype html><m
