@@ -25,7 +25,7 @@
     th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
     .num{ text-align:right; }
 
-    /* Form-layout för varv: tid stor, miss halvbred */
+    /* Varvform: tid stor, miss halvbred */
     .pair{ display:flex; gap:10px; }
     .time{ flex:2; }
     .miss{ flex:1; }
@@ -57,12 +57,17 @@
   function persist(){ localStorage.setItem(SKEY(s.eventId), JSON.stringify(s)); }
   function load(id){
     const raw = localStorage.getItem(SKEY(id));
-    if (raw) {
-      try { s = JSON.parse(raw); } catch(_){}
-    }
+    if (raw) { try { s = JSON.parse(raw); } catch(_){ } }
     s.eventId = id;
-    // Start ska vara först: om inget vettigt är igång, tvinga Start
-    if (!s.settings || (!s.settings.name && !s.people?.length)) s.tab = 'Start';
+    // Start ska vara först om inget igång
+    if (!s.settings || (!s.settings.name && !(s.people&&s.people.length))) s.tab = 'Start';
+  }
+
+  // ---- Labels ----
+  function personLabel(p, idx){
+    const nm = (p.name||'').trim();
+    const kl = (p.klass||'').trim();
+    return nm ? `${nm} (${kl || '-'})` : `Deltagare ${idx+1}`;
   }
 
   // ---- Tabs ----
@@ -80,12 +85,16 @@
 
   // ---- Helpers ----
   function addPerson(){
-    s.people.push({ id: crypto.randomUUID(), name:'', club:'', klass:'', laps:[] });
+    const idx = s.people.length;
+    // Ge ett tillfälligt namn så det syns direkt i listor/summering
+    s.people.push({ id: crypto.randomUUID(), name:`Deltagare ${idx+1}`, club:'', klass:'', laps:[] });
+    // Gör ny som aktiv för att fylla i den direkt
+    s.activeIndex = s.people.length - 1;
     persist(); render();
   }
   function removePerson(idx){
     s.people.splice(idx,1);
-    if (s.activeIndex >= s.people.length) s.activeIndex = 0;
+    if (s.activeIndex >= s.people.length) s.activeIndex = Math.max(0, s.people.length-1);
     persist(); render();
   }
 
@@ -137,18 +146,26 @@
     return wrap;
   }
 
-  // ---- Summering (v7-känsla) ----
+  // ---- Summering ----
   function computeSummary(){
     const penP = s.settings.penP, penH = s.settings.penH, penG = s.settings.penG;
-    return s.people.map(p=>{
+    return s.people.map((p,idx)=>{
       let base=0, miss=0, laps=0;
       (p.laps||[]).forEach(v=>{
         base += (v.tP||0)+(v.tH||0)+(v.tG||0)+(v.pt||0);
         miss += (v.mP||0)*penP + (v.mH||0)*penH + (v.mG||0)*penG;
         laps++;
       });
-      return { name:p.name||'', club:p.club||'', klass:p.klass||'', laps, total: base+miss };
+      return { name: personLabel(p, idx), club:p.club||'', klass:p.klass||'', laps, total: base+miss };
     }).sort((a,b)=>a.total-b.total);
+  }
+
+  // Hjälp för att uppdatera endast select-etiketter (utan full render)
+  function refreshSelectOptionsText(sel){
+    const opts = qsa('option', sel);
+    s.people.forEach((p,idx)=>{
+      if (opts[idx]) opts[idx].textContent = personLabel(p, idx);
+    });
   }
 
   // ---- TÄVLING ----
@@ -180,7 +197,7 @@
     s.people.forEach((p,idx)=>{
       const opt = document.createElement('option');
       opt.value = String(idx);
-      opt.textContent = p.name ? `${p.name} (${p.klass||'-'})` : `Deltagare ${idx+1}`;
+      opt.textContent = personLabel(p, idx);
       sel.appendChild(opt);
     });
     if (s.people.length) sel.value = String(s.activeIndex);
@@ -227,17 +244,19 @@
     `;
     wrap.appendChild(form);
 
-    // Bind personfält
+    // Bind personfält (och uppdatera endast select-texten, inte full render)
     if (p){
-      qs('#p_name',form).oninput = e=>{ p.name = e.target.value; persist(); };
+      const updateOpt = ()=> refreshSelectOptionsText(sel);
+
+      qs('#p_name',form).oninput = e=>{ p.name = e.target.value; persist(); updateOpt(); };
       qs('#p_club',form).oninput = e=>{ p.club = e.target.value; persist(); };
-      qs('#p_klass',form).oninput= e=>{ p.klass= e.target.value; persist(); };
+      qs('#p_klass',form).oninput= e=>{ p.klass= e.target.value; persist(); updateOpt(); };
     }
 
     // Lista varv för vald deltagare (kronologiskt)
     const lapsWrap = document.createElement('div');
     lapsWrap.className = 'panel';
-    lapsWrap.innerHTML = `<h3 style="margin:0 0 8px">Varv – ${p?.name||'Ingen vald'}</h3>
+    lapsWrap.innerHTML = `<h3 style="margin:0 0 8px">Varv – ${p ? (p.name||personLabel(p, s.activeIndex)) : 'Ingen vald'}</h3>
       <table><thead><tr>
         <th>#</th><th>PT</th><th class="num">P (t/m)</th><th class="num">H (t/m)</th><th class="num">G (t/m)</th>
       </tr></thead><tbody></tbody></table>`;
@@ -286,7 +305,7 @@
       persist(); render();
     };
 
-    // Resultatsammanfattning längst ned (kompakt)
+    // Resultatsammanfattning längst ned
     const sum = computeSummary();
     const res = document.createElement('div');
     res.className = 'panel';
