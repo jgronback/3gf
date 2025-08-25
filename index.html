@@ -530,9 +530,11 @@
         <div class="footer">
           Genererat: ${new Date().toLocaleString()} • Poängtavlor: ${ev.settings.boards||1}
         </div>
-        <script>window.onload=()=>window.print();</script>
       `;
-      w.document.write(html); w.document.close(); w.focus();
+      w.document.write(html);
+      w.document.close();
+      // Trigger utskrift UTAN inline <script> i strängen (fix för </script>-buggen)
+      setTimeout(()=>{ try{ w.focus(); w.print(); }catch(_){} }, 300);
     };
 
     return root;
