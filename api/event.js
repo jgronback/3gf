@@ -56,9 +56,9 @@ module.exports = async (req, res) => {
       let { error: eUp } = await client.from("events").upsert(upEvent);
       if (eUp) throw eUp;
 
-      const people = (body.people || []).map(p => ({
+      const peoplePayload = (Array.isArray(body.people) ? body.people : []).map(p => ({
         event_id: id,
-        external_id: p.id,
+        external_id: p.id,               // stabilt id från klienten
         name: p.name,
         club: p.club || null,
         klass: p.klass || null,
@@ -67,8 +67,9 @@ module.exports = async (req, res) => {
 
       let { error: eDel } = await client.from("people").delete().eq("event_id", id);
       if (eDel) throw eDel;
-      if (people.length) {
-        let { error: eIns } = await client.from("people").insert(people);
+
+      if (peoplePayload.length) {
+        let { error: eIns } = await client.from("people").insert(peoplePayload);
         if (eIns) throw eIns;
       }
 
