@@ -41,7 +41,7 @@
         <button id="loadServer">Hämta från server</button>
       </div>
     </div>
-    <p class="note">Denna sida läser/skriver lokal state från tävlingssidan (via <code>localStorage</code>) och kan spara/hämta samma data till/från servern.</p>
+    <p class="note">Denna sida läser/skriver lokal state från tävlingssidan (via <code>localStorage</code>) och kan spara/hämta samma data till/från servern. Alla deltagare har stabila ID:n.</p>
     <div id="status" class="note"></div>
   </div>
 
@@ -51,6 +51,7 @@
 (function(){
   const $ = id => document.getElementById(id);
   const sKey = id => `3gf_state_${id||'local'}`;
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
   function setStatus(msg){ $('status').textContent = msg; }
 
@@ -61,6 +62,7 @@
       <div><b>${st.settings?.name||''}</b> – ${st.settings?.date||''} – ${st.settings?.place||''}</div>
       <div>Straff: P ${st.settings?.penP||0}s, H ${st.settings?.penH||0}s, G ${st.settings?.penG||0}s. Poängtavlor: ${st.settings?.boards||1}</div>
       <div>Deltagare: ${st.people?.length||0} st</div>
+      <div>Aktiv: ${st.activeId ? st.people?.find?.(p=>p.id===st.activeId)?.name || '(okänd)' : '(ingen)'}</div>
     `;
     el.innerHTML = cnt;
   }
@@ -87,8 +89,14 @@
     if (!raw) { setStatus('Ingen lokal state hittad för detta Event-ID.'); renderPreview(null); return; }
     try{
       const st = JSON.parse(raw);
+      // Bakåtkompat: om aktiv saknas men personer finns → välj första
+      if (!st.activeId && Array.isArray(st.people) && st.people.length) {
+        st.activeId = st.people[0].id || null;
+      }
       setStatus('Lokal state laddad.'); renderPreview(st);
-    }catch{ setStatus('Kunde inte tolka lokal state.'); renderPreview(null); }
+    }catch{
+      setStatus('Kunde inte tolka lokal state.'); renderPreview(null);
+    }
   };
 
   $('saveServer').onclick = async ()=>{
@@ -110,12 +118,16 @@
           penG: st.settings?.penG||0
         },
         people: (st.people||[]).map(p=>({
-          id: p.id, name: p.name||'', club: p.club||'', klass: p.klass||'', laps: p.laps||[]
+          id: p.id || uid(), // stabilt id
+          name: p.name||'', club: p.club||'', klass: p.klass||'', laps: p.laps||[]
         }))
       };
       await apiPost(id, pin, payload);
       setStatus('Sparat till server.'); renderPreview(st);
-    }catch(e){ console.error(e); setStatus('Kunde inte spara till server. Kontrollera PIN/ID.'); }
+    }catch(e){
+      console.error(e);
+      setStatus('Kunde inte spara till server. Kontrollera PIN/ID.');
+    }
   };
 
   $('loadServer').onclick = async ()=>{
@@ -123,6 +135,10 @@
     if (!id) return setStatus('Ange Event-ID.');
     try{
       const data = await apiGet(id);
+      const people = (data.people||[]).map(r=>({
+        id: r.external_id || uid(),
+        name: r.name||'', club: r.club||'', klass: r.klass||'', laps: r.laps||[]
+      }));
       const st = {
         tab: 'Tävling',
         eventId: id,
@@ -135,14 +151,15 @@
           penG: data.event?.pen_g ?? 0,
           boards: 3
         },
-        people: (data.people||[]).map(r=>({
-          id: r.external_id, name: r.name||'', club: r.club||'', klass: r.klass||'', laps: r.laps||[]
-        })),
-        activeIndex: 0
+        people,
+        activeId: people[0]?.id || null
       };
       localStorage.setItem(sKey(id), JSON.stringify(st));
       setStatus('Hämtat från server och sparat lokalt.'); renderPreview(st);
-    }catch(e){ console.error(e); setStatus('Kunde inte hämta från server.'); }
+    }catch(e){
+      console.error(e);
+      setStatus('Kunde inte hämta från server.');
+    }
   };
 })();
 </script>
