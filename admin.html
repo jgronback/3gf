@@ -8,7 +8,7 @@
     body{ font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0e1117; color:#e7ebf4; margin:0; padding:12px; }
     .panel{ background:#151a23; border:1px solid #283043; border-radius:12px; padding:12px; margin-bottom:12px; }
     label{ display:block; margin:8px 0 4px; color:#a5b0c4; }
-    input, select, button, textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid #283043; background:#10141d; color:#e7ebf4; }
+    input, button{ width:100%; padding:10px; border-radius:10px; border:1px solid #283043; background:#10141d; color:#e7ebf4; }
     button{ cursor:pointer; font-weight:600; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .row>div{ flex:1; min-width:220px; }
@@ -87,12 +87,8 @@
     if (!raw) { setStatus('Ingen lokal state hittad för detta Event-ID.'); renderPreview(null); return; }
     try{
       const st = JSON.parse(raw);
-      setStatus('Lokal state laddad.');
-      renderPreview(st);
-    }catch{
-      setStatus('Kunde inte tolka lokal state.');
-      renderPreview(null);
-    }
+      setStatus('Lokal state laddad.'); renderPreview(st);
+    }catch{ setStatus('Kunde inte tolka lokal state.'); renderPreview(null); }
   };
 
   $('saveServer').onclick = async ()=>{
@@ -118,12 +114,8 @@
         }))
       };
       await apiPost(id, pin, payload);
-      setStatus('Sparat till server.');
-      renderPreview(st);
-    }catch(e){
-      console.error(e);
-      setStatus('Kunde inte spara till server. Kontrollera PIN/ID.');
-    }
+      setStatus('Sparat till server.'); renderPreview(st);
+    }catch(e){ console.error(e); setStatus('Kunde inte spara till server. Kontrollera PIN/ID.'); }
   };
 
   $('loadServer').onclick = async ()=>{
@@ -149,12 +141,8 @@
         activeIndex: 0
       };
       localStorage.setItem(sKey(id), JSON.stringify(st));
-      setStatus('Hämtat från server och sparat lokalt.');
-      renderPreview(st);
-    }catch(e){
-      console.error(e);
-      setStatus('Kunde inte hämta från server.');
-    }
+      setStatus('Hämtat från server och sparat lokalt.'); renderPreview(st);
+    }catch(e){ console.error(e); setStatus('Kunde inte hämta från server.'); }
   };
 })();
 </script>
