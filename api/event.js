@@ -41,6 +41,7 @@ module.exports = async (req, res) => {
 
       const body = req.body || {};
       const ev = body.event || {};
+
       const upEvent = {
         id,
         name: ev.name || null,
