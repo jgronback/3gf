@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="sv">
 <head>
@@ -8,198 +6,159 @@
   <title>3GF – Admin</title>
   <style>
     body{ font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0e1117; color:#e7ebf4; margin:0; padding:12px; }
-    .tabs{ display:flex; gap:8px; margin-bottom:12px; }
-    .tab{ padding:10px 14px; background:#151a23; border:1px solid #283043; border-radius:10px; cursor:pointer; }
-    .tab.active{ outline:2px solid #3b82f6; }
     .panel{ background:#151a23; border:1px solid #283043; border-radius:12px; padding:12px; margin-bottom:12px; }
     label{ display:block; margin:8px 0 4px; color:#a5b0c4; }
     input, select, button, textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid #283043; background:#10141d; color:#e7ebf4; }
     button{ cursor:pointer; font-weight:600; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .row>div{ flex:1; min-width:220px; }
+    .note{ color:#a5b0c4; font-size:.9rem; }
     table{ width:100%; border-collapse:collapse; }
     th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
   </style>
 </head>
 <body>
   <h1>3GF – Admin</h1>
-  <div class="tabs" id="tabs"></div>
-  <div id="view"></div>
+
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label>Event-ID</label>
+        <input id="eventId" placeholder="satila-2025-09-14" />
+      </div>
+      <div>
+        <label>Admin-PIN</label>
+        <input id="adminPin" placeholder="(hemlig PIN)" />
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="loadLocal">Ladda från denna webbläsare</button>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="saveServer">Spara till server</button>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="loadServer">Hämta från server</button>
+      </div>
+    </div>
+    <p class="note">Denna sida läser/skriver lokal state från tävlingssidan (via <code>localStorage</code>) och kan spara/hämta samma data till/från servern.</p>
+    <div id="status" class="note"></div>
+  </div>
+
+  <div class="panel" id="preview"></div>
 
 <script>
 (function(){
   const $ = id => document.getElementById(id);
-  const qs = (sel, el=document) => el.querySelector(sel);
-  const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+  const sKey = id => `3gf_state_${id||'local'}`;
 
-  const TABS = ['Spara/Hämta','Lista tävlingar'];
-  let state = { tab:TABS[0] };
+  function setStatus(msg){ $('status').textContent = msg; }
 
-  function renderTabs(){
-    const el = $('#tabs'); el.innerHTML='';
-    TABS.forEach(t=>{
-      const b=document.createElement('button'); b.className='tab'+(state.tab===t?' active':''); b.textContent=t; b.onclick=()=>{state.tab=t; render();}; el.appendChild(b);
-    });
+  function renderPreview(st){
+    const el = $('preview');
+    if (!st) { el.textContent = 'Ingen data att visa.'; return; }
+    const cnt = `
+      <div><b>${st.settings?.name||''}</b> – ${st.settings?.date||''} – ${st.settings?.place||''}</div>
+      <div>Straff: P ${st.settings?.penP||0}s, H ${st.settings?.penH||0}s, G ${st.settings?.penG||0}s. Poängtavlor: ${st.settings?.boards||1}</div>
+      <div>Deltagare: ${st.people?.length||0} st</div>
+    `;
+    el.innerHTML = cnt;
   }
 
-  function sKey(id){ return `3gf_state_${id||'local'}`; }
-
-  // Debounce helper
-  function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
-
   async function apiGet(id){
-    const url = id? `/api/event?id=${encodeURIComponent(id)}` : '/api/event';
-    const r = await fetch(url);
+    const r = await fetch(`/api/event?id=${encodeURIComponent(id)}`);
     if (!r.ok) throw new Error('GET failed');
     return await r.json();
   }
   async function apiPost(id, pin, payload){
-    const r = await fetch(`/api/event?id=${encodeURIComponent(id)}`,{
-      method:'POST', headers:{ 'Content-Type':'application/json', 'x-admin-token': pin }, body:JSON.stringify(payload)
+    const r = await fetch(`/api/event?id=${encodeURIComponent(id)}`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-admin-token': pin },
+      body: JSON.stringify(payload)
     });
     if (!r.ok) throw new Error('POST failed');
     return await r.json();
   }
 
-  // --- View: Spara/Hämta ---
-  function viewSaveLoad(){
-    const wrap=document.createElement('div'); wrap.className='panel';
-    wrap.innerHTML = `
-      <div class="row">
-        <div><label>Event-ID</label><input id="eventId" placeholder="satila-2025-09-14"></div>
-        <div><label>Admin-PIN</label><input id="adminPin" placeholder="(hemlig PIN)"></div>
-        <div><label>&nbsp;</label><button id="loadLocal">Ladda från denna webbläsare</button></div>
-        <div><label>&nbsp;</label><button id="saveServer">Spara till server</button></div>
-      </div>
-      <div class="row">
-        <div><label>Autospara till server (lyssnar på localStorage)</label>
-          <select id="autoSync">
-            <option value="off">Av</option>
-            <option value="on">På</option>
-          </select>
-        </div>
-      </div>
-      <div class="panel" id="status"></div>
-    `;
+  $('loadLocal').onclick = ()=>{
+    const id = $('eventId').value.trim();
+    if (!id) return setStatus('Ange Event-ID.');
+    const raw = localStorage.getItem(sKey(id));
+    if (!raw) { setStatus('Ingen lokal state hittad för detta Event-ID.'); renderPreview(null); return; }
+    try{
+      const st = JSON.parse(raw);
+      setStatus('Lokal state laddad.');
+      renderPreview(st);
+    }catch{
+      setStatus('Kunde inte tolka lokal state.');
+      renderPreview(null);
+    }
+  };
 
-    const status = qs('#status', wrap);
-    const setStatus = (msg)=>{ status.textContent = msg; };
+  $('saveServer').onclick = async ()=>{
+    const id = $('eventId').value.trim();
+    const pin = $('adminPin').value.trim();
+    if (!id || !pin) return setStatus('Ange Event-ID och Admin-PIN.');
+    const raw = localStorage.getItem(sKey(id));
+    if (!raw) return setStatus('Ingen lokal state att spara.');
 
-    qs('#loadLocal', wrap).onclick = async ()=>{
-      const id = qs('#eventId', wrap).value.trim();
-      const raw = localStorage.getItem(sKey(id));
-      if(!raw){ setStatus('Inget lokalt innehåll hittat.'); return; }
-      try{
-        const st = JSON.parse(raw);
-        setStatus(`Lokal data laddad: ${st.people?.length||0} deltagare, ${st.settings?.name||''}`);
-      }catch(e){ setStatus('Fel vid parsning av localStorage.'); }
-    };
-
-    qs('#saveServer', wrap).onclick = async ()=>{
-      const id = qs('#eventId', wrap).value.trim();
-      const pin = qs('#adminPin', wrap).value.trim();
-      const raw = localStorage.getItem(sKey(id));
-      if(!raw){ setStatus('Ingen lokal state att spara.'); return; }
-      try{
-        const st = JSON.parse(raw);
-        const payload = { event: {
+    try{
+      const st = JSON.parse(raw);
+      const payload = {
+        event: {
           name: st.settings?.name||'',
           date: st.settings?.date||'',
           place: st.settings?.place||'',
-          penP: st.settings?.penP||5,
-          penH: st.settings?.penH||5,
-          penG: st.settings?.penG||5
-        }, people: st.people||[] };
-        await apiPost(id, pin, payload);
-        setStatus('Sparat till server.');
-      }catch(e){ setStatus('Kunde inte spara till server. Kontrollera PIN/ID.'); }
-    };
-
-    // Autosync via storage events
-    const debSave = debounce(async ()=>{
-      const id = qs('#eventId', wrap).value.trim();
-      const pin = qs('#adminPin', wrap).value.trim();
-      if(!id || !pin) return; // kräver båda
-      const raw = localStorage.getItem(sKey(id));
-      if(!raw) return;
-      try{
-        const st = JSON.parse(raw);
-        const payload = { event: {
-          name: st.settings?.name||'',
-          date: st.settings?.date||'',
-          place: st.settings?.place||'',
-          penP: st.settings?.penP||5,
-          penH: st.settings?.penH||5,
-          penG: st.settings?.penG||5
-        }, people: st.people||[] };
-        await apiPost(id, pin, payload);
-        setStatus('Autosparat till server.');
-      }catch(e){ /* tyst fel */ }
-    }, 800);
-
-    function storageHandler(ev){
-      const id = qs('#eventId', wrap).value.trim();
-      if(!id) return;
-      if(ev.key === sKey(id) && qs('#autoSync', wrap).value==='on') debSave();
+          penP: st.settings?.penP||0,
+          penH: st.settings?.penH||0,
+          penG: st.settings?.penG||0
+        },
+        // Viktigt: klass kommer från r.klass (inte r.class)
+        people: (st.people||[]).map(p=>({
+          id: p.id, name: p.name||'', club: p.club||'', klass: p.klass||'', laps: p.laps||[]
+        }))
+      };
+      await apiPost(id, pin, payload);
+      setStatus('Sparat till server.');
+      renderPreview(st);
+    }catch(e){
+      console.error(e);
+      setStatus('Kunde inte spara till server. Kontrollera PIN/ID.');
     }
+  };
 
-    window.addEventListener('storage', storageHandler);
-
-    return wrap;
-  }
-
-  // --- View: Lista tävlingar ---
-  async function viewList(){
-    const wrap=document.createElement('div'); wrap.className='panel';
-    wrap.innerHTML = `
-      <div class="row">
-        <div><label>Admin-PIN</label><input id="adminPin2" placeholder="(hemlig PIN)"></div>
-        <div><label>&nbsp;</label><button id="refresh">Uppdatera lista</button></div>
-      </div>
-      <div class="panel" id="list"></div>
-    `;
-
-    const list = qs('#list', wrap);
-
-    async function loadList(){
-      list.textContent = 'Hämtar...';
-      try{
-        const data = await apiGet();
-        const evts = data.events||[];
-        if (!evts.length){ list.textContent = 'Inga tävlingar i databasen.'; return; }
-        const tbl = document.createElement('table');
-        tbl.innerHTML = `<thead><tr><th>ID</th><th>Namn</th><th>Datum</th><th>Plats</th><th></th></tr></thead><tbody></tbody>`;
-        const tb = tbl.querySelector('tbody');
-        evts.forEach(e=>{
-          const tr=document.createElement('tr');
-          tr.innerHTML = `<td>${e.id}</td><td>${e.name||''}</td><td>${e.date||''}</td><td>${e.place||''}</td><td><button data-id="${e.id}">Öppna</button></td>`;
-          tb.appendChild(tr);
-        });
-        list.innerHTML=''; list.appendChild(tbl);
-        qsa('button[data-id]', list).forEach(b=>{
-          b.onclick = async ()=>{
-            const id = b.getAttribute('data-id');
-            const d = await apiGet(id);
-            alert(`Laddat ${id}: ${d.people?.length||0} deltagare`);
-          };
-        });
-      }catch(e){ list.textContent = 'Kunde inte hämta lista.'; }
+  $('loadServer').onclick = async ()=>{
+    const id = $('eventId').value.trim();
+    if (!id) return setStatus('Ange Event-ID.');
+    try{
+      const data = await apiGet(id);
+      const st = {
+        tab: 'Tävling',
+        eventId: id,
+        settings: {
+          name: data.event?.name||'',
+          date: data.event?.date||'',
+          place: data.event?.place||'',
+          penP: data.event?.pen_p ?? 0,
+          penH: data.event?.pen_h ?? 0,
+          penG: data.event?.pen_g ?? 0,
+          boards: 3
+        },
+        people: (data.people||[]).map(r=>({
+          id: r.external_id, name: r.name||'', club: r.club||'', klass: r.klass||'', laps: r.laps||[]
+        })),
+        activeIndex: 0
+      };
+      localStorage.setItem(sKey(id), JSON.stringify(st));
+      setStatus('Hämtat från server och sparat lokalt.');
+      renderPreview(st);
+    }catch(e){
+      console.error(e);
+      setStatus('Kunde inte hämta från server.');
     }
-
-    qs('#refresh', wrap).onclick = loadList;
-    loadList();
-
-    return wrap;
-  }
-
-  async function render(){
-    renderTabs();
-    const v = $('#view'); v.innerHTML='';
-    if (state.tab==='Spara/Hämta') v.appendChild(viewSaveLoad());
-    if (state.tab==='Lista tävlingar') v.appendChild(await viewList());
-  }
-
-  render();
+  };
 })();
 </script>
 </body>
