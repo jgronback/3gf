@@ -35,8 +35,9 @@
 
 <script>
 (function(){
-  const $ = (id, el=document) => el.getElementById ? el.getElementById(id) : document.getElementById(id);
-  const qs = (sel, el=document) => el.querySelector(sel);
+  // Helpers
+  const $ = (id, el=document) => el.getElementById(id);          // id UTAN '#'
+  const qs = (sel, el=document) => el.querySelector(sel);        // CSS-selektor (t.ex. '#tP')
   const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
   const SKEY = id => `3gf_state_${id||'local'}`;
 
@@ -56,9 +57,8 @@
     if (raw) {
       try { s = JSON.parse(raw); }
       catch(_) {}
-    } else {
-      s.eventId = id;
     }
+    s.eventId = id;
   }
 
   // ---- Tabs ----
@@ -126,11 +126,11 @@
       render();
     };
 
-    // Byt localStorage-nyckel (eventId) utan att blanda data
+    // Byt localStorage-nyckel (eventId)
     wrap.querySelector('#switchEvent').onclick = ()=>{
       const id = qs('#eventId',wrap).value.trim() || 'satila-local';
       s.eventId = id;
-      persist(); // skriv in under nya nyckeln
+      persist();
       render();
     };
 
@@ -225,7 +225,7 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${i+1}</td>
-          <td>${(v.pt||0).toFixed?.(2) ?? v.pt || 0}</td>
+          <td>${(v.pt||0).toFixed ? (v.pt||0).toFixed(2) : (v.pt||0)}</td>
           <td class="num">${(v.tP||0)} / ${(v.mP||0)}</td>
           <td class="num">${(v.tH||0)} / ${(v.mH||0)}</td>
           <td class="num">${(v.tG||0)} / ${(v.mG||0)}</td>
@@ -256,23 +256,23 @@
       if (!s.people.length) { addPerson(); }
       const p = s.people[s.activeIndex] || s.people[0];
       const v = {
-        tP:+$('#tP',form).value||0, mP:+$('#mP',form).value||0,
-        tH:+$('#tH',form).value||0, mH:+$('#mH',form).value||0,
-        tG:+$('#tG',form).value||0, mG:+$('#mG',form).value||0,
-        pt:+$('#ptLap',form).value||0,
+        tP:+qs('#tP',form).value||0, mP:+qs('#mP',form).value||0,
+        tH:+qs('#tH',form).value||0, mH:+qs('#mH',form).value||0,
+        tG:+qs('#tG',form).value||0, mG:+qs('#mG',form).value||0,
+        pt:+qs('#ptLap',form).value||0,
         dtH: Date.now()
       };
       (p.laps ||= []).push(v);
 
       // Töm inputs
-      ['tP','mP','tH','mH','tG','mG','ptLap'].forEach(id=>$('#'+id,form).value='');
+      ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(selId=>qs(selId,form).value='');
 
       // Hoppa till nästa deltagare (cirkulärt)
       if (s.people.length > 1) {
         s.activeIndex = (s.activeIndex + 1) % s.people.length;
       }
       persist();
-      render(); // återskapa vyn med uppdaterad aktiv
+      render(); // uppdatera vy
     };
 
     return wrap;
