@@ -14,18 +14,21 @@
     .tab.active{ outline:2px solid #3b82f6; }
     .panel{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:12px; }
     label{ display:block; margin:8px 0 4px; color:var(--muted); }
-    input, select, button, textarea{ width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel2); color:var(--ink); }
+    input, select, button{ width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel2); color:var(--ink); }
     button{ cursor:pointer; font-weight:600; }
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     .row>div{ flex:1; min-width:200px; }
     .right{ text-align:right; }
     .boards{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
     .chip{ padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:var(--panel2); }
-    .people{ display:grid; gap:8px; }
-    .person{ padding:10px; border:1px dashed var(--border); border-radius:10px; }
     table{ width:100%; border-collapse:collapse; margin-top:8px; }
     th, td{ border-bottom:1px solid #283043; padding:8px; text-align:left; }
     .num{ text-align:right; }
+
+    /* Form-layout för varv: tid stor, miss halvbred */
+    .pair{ display:flex; gap:10px; }
+    .time{ flex:2; }
+    .miss{ flex:1; }
   </style>
 </head>
 <body>
@@ -36,9 +39,9 @@
 <script>
 (function(){
   // Helpers
-  const $ = (id, el=document) => el.getElementById(id);          // id UTAN '#'
-  const qs = (sel, el=document) => el.querySelector(sel);        // CSS-selektor (t.ex. '#tP')
-  const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+  const $  = (id, el=document) => el.getElementById(id);
+  const qs = (sel, el=document) => el.querySelector(sel);
+  const qsa= (sel, el=document) => Array.from(el.querySelectorAll(sel));
   const SKEY = id => `3gf_state_${id||'local'}`;
 
   // ---- App state (ingen DB här) ----
@@ -55,17 +58,17 @@
   function load(id){
     const raw = localStorage.getItem(SKEY(id));
     if (raw) {
-      try { s = JSON.parse(raw); }
-      catch(_) {}
+      try { s = JSON.parse(raw); } catch(_){}
     }
     s.eventId = id;
+    // Start ska vara först: om inget vettigt är igång, tvinga Start
+    if (!s.settings || (!s.settings.name && !s.people?.length)) s.tab = 'Start';
   }
 
   // ---- Tabs ----
   const TABS = ['Start','Tävling'];
   function renderTabs(){
-    const el = document.getElementById('tabs');
-    el.innerHTML = '';
+    const el = $('tabs'); el.innerHTML='';
     TABS.forEach(t=>{
       const b = document.createElement('button');
       b.className = 'tab' + (s.tab===t?' active':'');
@@ -112,7 +115,6 @@
       </div>
     `;
 
-    // Spara inställningar och gå till Tävling
     wrap.querySelector('#startBtn').onclick = ()=>{
       s.settings.name = qs('#name',wrap).value.trim();
       s.settings.date = qs('#date',wrap).value.trim();
@@ -126,15 +128,27 @@
       render();
     };
 
-    // Byt localStorage-nyckel (eventId)
     wrap.querySelector('#switchEvent').onclick = ()=>{
       const id = qs('#eventId',wrap).value.trim() || 'satila-local';
       s.eventId = id;
-      persist();
-      render();
+      persist(); render();
     };
 
     return wrap;
+  }
+
+  // ---- Summering (v7-känsla) ----
+  function computeSummary(){
+    const penP = s.settings.penP, penH = s.settings.penH, penG = s.settings.penG;
+    return s.people.map(p=>{
+      let base=0, miss=0, laps=0;
+      (p.laps||[]).forEach(v=>{
+        base += (v.tP||0)+(v.tH||0)+(v.tG||0)+(v.pt||0);
+        miss += (v.mP||0)*penP + (v.mH||0)*penH + (v.mG||0)*penG;
+        laps++;
+      });
+      return { name:p.name||'', club:p.club||'', klass:p.klass||'', laps, total: base+miss };
+    }).sort((a,b)=>a.total-b.total);
   }
 
   // ---- TÄVLING ----
@@ -142,83 +156,95 @@
     const wrap = document.createElement('div');
     wrap.className = 'panel';
 
-    // Poängtavlor
-    const boards = document.createElement('div');
-    boards.className = 'boards';
-    for(let i=1;i<= (s.settings.boards||1);i++){
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.textContent = `Poängtavla ${i}`;
-      boards.appendChild(chip);
-    }
-    wrap.appendChild(boards);
+    // Överdel: välj deltagare, lägg till/ta bort
+    const head = document.createElement('div');
+    head.className = 'row';
+    head.innerHTML = `
+      <div>
+        <label>Välj deltagare</label>
+        <select id="selPerson"></select>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="addPersonBtn">Lägg till deltagare</button>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button id="removePersonBtn">Ta bort vald</button>
+      </div>
+    `;
+    wrap.appendChild(head);
 
-    // Deltagarväljare + varv-formulär
+    const sel = qs('#selPerson', head);
+    sel.innerHTML = '';
+    s.people.forEach((p,idx)=>{
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      opt.textContent = p.name ? `${p.name} (${p.klass||'-'})` : `Deltagare ${idx+1}`;
+      sel.appendChild(opt);
+    });
+    if (s.people.length) sel.value = String(s.activeIndex);
+
+    qs('#addPersonBtn', head).onclick = addPerson;
+    qs('#removePersonBtn', head).onclick = ()=>{
+      if (!s.people.length) return;
+      removePerson(s.activeIndex);
+    };
+    sel.onchange = ()=>{ s.activeIndex = +sel.value; persist(); render(); };
+
+    // Formulär för varv för vald deltagare
     const form = document.createElement('div');
     form.className = 'panel';
+    const p = s.people[s.activeIndex] || null;
+
     form.innerHTML = `
       <div class="row">
-        <div>
-          <label>Välj deltagare</label>
-          <select id="selPerson"></select>
-        </div>
-        <div class="right">
-          <label>&nbsp;</label>
-          <button id="addPersonBtn">Lägg till deltagare</button>
-        </div>
+        <div><label>Namn</label><input id="p_name" value="${p?.name||''}"></div>
+        <div><label>Klubb</label><input id="p_club" value="${p?.club||''}"></div>
+        <div><label>Klass</label><input id="p_klass" value="${p?.klass||''}"></div>
       </div>
+
       <div class="row">
         <div><label>PT (poängtid)</label><input id="ptLap" type="number" step="0.01" value=""></div>
       </div>
+
       <div class="row">
-        <div><label>Pistol tid</label><input id="tP" type="number" step="0.01" value=""></div>
-        <div><label>Pistol miss</label><input id="mP" type="number" min="0" step="1" value=""></div>
-        <div><label>Hagel tid</label><input id="tH" type="number" step="0.01" value=""></div>
-        <div><label>Hagel miss</label><input id="mH" type="number" min="0" step="1" value=""></div>
-        <div><label>Gevär tid</label><input id="tG" type="number" step="0.01" value=""></div>
-        <div><label>Gevär miss</label><input id="mG" type="number" min="0" step="1" value=""></div>
+        <div class="pair time"><div><label>Pistol tid</label><input id="tP" type="number" step="0.01" value=""></div></div>
+        <div class="pair miss"><div><label>Pistol miss</label><input id="mP" type="number" min="0" step="1" value=""></div></div>
       </div>
+      <div class="row">
+        <div class="pair time"><div><label>Hagel tid</label><input id="tH" type="number" step="0.01" value=""></div></div>
+        <div class="pair miss"><div><label>Hagel miss</label><input id="mH" type="number" min="0" step="1" value=""></div></div>
+      </div>
+      <div class="row">
+        <div class="pair time"><div><label>Gevär tid</label><input id="tG" type="number" step="0.01" value=""></div></div>
+        <div class="pair miss"><div><label>Gevär miss</label><input id="mG" type="number" min="0" step="1" value=""></div></div>
+      </div>
+
       <div class="row">
         <div class="right"><label>&nbsp;</label><button id="saveLap">Spara varv</button></div>
       </div>
     `;
     wrap.appendChild(form);
 
-    // Lista deltagare (enkel)
-    const ppl = document.createElement('div');
-    ppl.className = 'people';
-    s.people.forEach((p,idx)=>{
-      const card = document.createElement('div');
-      card.className = 'person';
-      card.innerHTML = `
-        <div class="row">
-          <div><label>Namn</label><input data-f="name" value="${p.name||''}"></div>
-          <div><label>Klubb</label><input data-f="club" value="${p.club||''}"></div>
-          <div><label>Klass</label><input data-f="klass" value="${p.klass||''}"></div>
-          <div class="right"><label>&nbsp;</label><button data-del="${idx}">Ta bort</button></div>
-        </div>
-        <div>
-          <table>
-            <thead><tr><th>#</th><th>PT</th><th class="num">P (t/m)</th><th class="num">H (t/m)</th><th class="num">G (t/m)</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      `;
-      // bind inputs
-      qsa('input', card).forEach(inp=>{
-        inp.oninput = ()=>{
-          const f = inp.getAttribute('data-f');
-          p[f] = inp.value;
-          persist();
-        };
-      });
-      // ta bort
-      qs(`button[data-del="${idx}"]`, card).onclick = ()=> removePerson(idx);
+    // Bind personfält
+    if (p){
+      qs('#p_name',form).oninput = e=>{ p.name = e.target.value; persist(); };
+      qs('#p_club',form).oninput = e=>{ p.club = e.target.value; persist(); };
+      qs('#p_klass',form).oninput= e=>{ p.klass= e.target.value; persist(); };
+    }
 
-      // render laps (sort by dtH, FIX: b.dtH)
-      const tb = card.querySelector('tbody');
+    // Lista varv för vald deltagare (kronologiskt)
+    const lapsWrap = document.createElement('div');
+    lapsWrap.className = 'panel';
+    lapsWrap.innerHTML = `<h3 style="margin:0 0 8px">Varv – ${p?.name||'Ingen vald'}</h3>
+      <table><thead><tr>
+        <th>#</th><th>PT</th><th class="num">P (t/m)</th><th class="num">H (t/m)</th><th class="num">G (t/m)</th>
+      </tr></thead><tbody></tbody></table>`;
+    const tb = lapsWrap.querySelector('tbody');
+    if (p){
       const laps = [...(p.laps||[])].sort((a,b)=>{
-        if ((a.dtH||0)!==(b.dtH||0)) return (a.dtH||0) - (b.dtH||0); // FIX
+        if ((a.dtH||0)!==(b.dtH||0)) return (a.dtH||0)-(b.dtH||0); // FIX b.dtH
         return 0;
       });
       laps.forEach((v,i)=>{
@@ -228,33 +254,20 @@
           <td>${(v.pt||0).toFixed ? (v.pt||0).toFixed(2) : (v.pt||0)}</td>
           <td class="num">${(v.tP||0)} / ${(v.mP||0)}</td>
           <td class="num">${(v.tH||0)} / ${(v.mH||0)}</td>
-          <td class="num">${(v.tG||0)} / ${(v.mG||0)}</td>
-        `;
+          <td class="num">${(v.tG||0)} / ${(v.mG||0)}</td>`;
         tb.appendChild(tr);
       });
+    } else {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="5">Lägg till en deltagare för att börja.</td>`;
+      tb.appendChild(tr);
+    }
+    wrap.appendChild(lapsWrap);
 
-      ppl.appendChild(card);
-    });
-    wrap.appendChild(ppl);
-
-    // fyll select
-    const sel = qs('#selPerson', form);
-    sel.innerHTML = '';
-    s.people.forEach((p,idx)=>{
-      const opt = document.createElement('option');
-      opt.value = String(idx);
-      opt.textContent = p.name ? `${p.name} (${p.klass||'-'})` : `Deltagare ${idx+1}`;
-      sel.appendChild(opt);
-    });
-    sel.value = String(s.activeIndex);
-
-    // handlers
-    qs('#addPersonBtn', form).onclick = addPerson;
-    sel.onchange = ()=>{ s.activeIndex = +sel.value; persist(); };
-
+    // Spara varv
     qs('#saveLap', form).onclick = ()=>{
       if (!s.people.length) { addPerson(); }
-      const p = s.people[s.activeIndex] || s.people[0];
+      const p2 = s.people[s.activeIndex] || s.people[0];
       const v = {
         tP:+qs('#tP',form).value||0, mP:+qs('#mP',form).value||0,
         tH:+qs('#tH',form).value||0, mH:+qs('#mH',form).value||0,
@@ -262,18 +275,30 @@
         pt:+qs('#ptLap',form).value||0,
         dtH: Date.now()
       };
-      (p.laps ||= []).push(v);
+      (p2.laps ||= []).push(v);
 
       // Töm inputs
-      ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(selId=>qs(selId,form).value='');
+      ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(sel=>{ const el=qs(sel,form); if(el) el.value=''; });
 
-      // Hoppa till nästa deltagare (cirkulärt)
-      if (s.people.length > 1) {
-        s.activeIndex = (s.activeIndex + 1) % s.people.length;
-      }
-      persist();
-      render(); // uppdatera vy
+      // Nästa deltagare
+      if (s.people.length>1) s.activeIndex = (s.activeIndex+1)%s.people.length;
+
+      persist(); render();
     };
+
+    // Resultatsammanfattning längst ned (kompakt)
+    const sum = computeSummary();
+    const res = document.createElement('div');
+    res.className = 'panel';
+    res.innerHTML = `<h3 style="margin:0 0 8px">Resultat (totaltid inkl. straff)</h3>
+      <table><thead><tr><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Total (s)</th></tr></thead><tbody></tbody></table>`;
+    const rtb = res.querySelector('tbody');
+    sum.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.name}</td><td>${r.club}</td><td>${r.klass}</td><td class="num">${r.laps}</td><td class="num">${r.total.toFixed(2)}</td>`;
+      rtb.appendChild(tr);
+    });
+    wrap.appendChild(res);
 
     return wrap;
   }
@@ -281,8 +306,7 @@
   // ---- Render root ----
   function render(){
     renderTabs();
-    const v = document.getElementById('view');
-    v.innerHTML = '';
+    const v = $('view'); v.innerHTML='';
     if (s.tab==='Start') v.appendChild(renderStart());
     if (s.tab==='Tävling') v.appendChild(renderCompetition());
   }
