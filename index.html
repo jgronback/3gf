@@ -32,6 +32,8 @@
     .active-badge{ font-weight:600; background:#1e2a44; padding:6px 10px; border-radius:8px; margin:6px 0 10px; display:inline-block; }
     .controls{ display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
     .small{ font-size:.9rem; color:var(--muted); }
+    .note{ color:#a5b0c4; font-size:.9rem; margin-top:6px; }
+    .ok{ color:#7dd3a7; }
   </style>
 </head>
 <body>
@@ -48,6 +50,7 @@
 
   var KEY_EVENTS  = '3gf_events';
   var KEY_CURRENT = '3gf_current_event';
+  var KEY_PIN     = '3gf_admin_pin';     // lagras lokalt när du angett din Admin-PIN en gång (via admin.html eller prompt)
   function uid(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
   function todayISO(){
     var d=new Date(); var y=d.getFullYear(); var m=('0'+(d.getMonth()+1)).slice(-2); var da=('0'+d.getDate()).slice(-2);
@@ -58,9 +61,11 @@
     s = s.replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
     return s || 'tavling';
   }
+  function getPin(){ try{return localStorage.getItem(KEY_PIN)||'';}catch(e){return '';} }
+  function setPin(p){ try{ if(p) localStorage.setItem(KEY_PIN, p); }catch(e){} }
 
   // ------- Data model -------
-  // events = { id: { id, createdAt, status:'open'|'closed', settings:{name,date,place,penP,penH,penG,boards}, people:[{id,name,club,klass,laps:[]},..], activeId } }
+  // events = { id: { id, createdAt, status:'open'|'closed', settings:{name,date,place,penP,penH,penG,boards}, people:[{id,name,club,klass,laps:[]},..], activeId, _lastSync } }
   var events = {};
   var currentId = null;
 
@@ -88,7 +93,8 @@
           people: (s && s.people ? s.people : []).map(function(p){
             return { id: (p && p.id) || uid(), name:(p && p.name)||'', club:(p && p.club)||'', klass:(p && p.klass)||'', laps:(p && p.laps)||[] };
           }),
-          activeId: (s && s.activeId) || ((s && s.people && s.people[0] && s.people[0].id) || null)
+          activeId: (s && s.activeId) || ((s && s.people && s.people[0] && s.people[0].id) || null),
+          _lastSync: 0
         };
         currentId = id;
         localStorage.removeItem('3gf_state');
@@ -113,9 +119,66 @@
       })[0] : null;
     }
   }
+
+  // ------- Server sync -------
+  var syncTimers = {}; // id -> timeout
+  var syncing    = {}; // id -> bool
+
+  function buildPayload(ev){
+    return {
+      event: {
+        name: (ev.settings && ev.settings.name) || '',
+        date: (ev.settings && ev.settings.date) || '',
+        place:(ev.settings && ev.settings.place)||'',
+        penP: (ev.settings && ev.settings.penP) || 0,
+        penH: (ev.settings && ev.settings.penH) || 0,
+        penG: (ev.settings && ev.settings.penG) || 0
+      },
+      people: (ev.people||[]).map(function(p){
+        return { id:p.id, name:p.name||'', club:p.club||'', klass:p.klass||'', laps:p.laps||[] };
+      })
+    };
+  }
+
+  function syncEventNow(id, opts){
+    opts = opts || {};
+    var pin = getPin();
+    if (!pin || !id || !events[id]) return;
+    if (syncing[id]) return; // undvik parallella
+    syncing[id] = true;
+
+    var ev = events[id];
+    var payload = buildPayload(ev);
+
+    fetch('/api/event?id='+encodeURIComponent(id), {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-admin-token': pin },
+      body: JSON.stringify(payload)
+    }).then(function(r){ return r.json().catch(function(){ return {}; }); })
+      .then(function(){
+        ev._lastSync = Date.now();
+        try{ localStorage.setItem(KEY_EVENTS, JSON.stringify(events)); }catch(e){}
+      })
+      .catch(function(e){ /* tyst fail – du kan lägga console.warn(e) här om du vill */ })
+      .finally ? syncing[id]=false : (syncing[id]=false);
+  }
+
+  function scheduleSync(id, immediate){
+    if (!getPin()) return; // ingen PIN => ingen autosynk
+    if (!id || !events[id]) return;
+    try{ clearTimeout(syncTimers[id]); }catch(e){}
+    syncTimers[id] = setTimeout(function(){ syncEventNow(id); }, immediate ? 80 : 800);
+  }
+
+  // ------- Persistens (lokalt + ev. autosynk) -------
   function saveAll(){
-    localStorage.setItem(KEY_EVENTS, JSON.stringify(events));
-    if (currentId) localStorage.setItem(KEY_CURRENT, currentId); else localStorage.removeItem(KEY_CURRENT);
+    try{ localStorage.setItem(KEY_EVENTS, JSON.stringify(events)); }catch(e){}
+    if (currentId) {
+      try{ localStorage.setItem(KEY_CURRENT, currentId); }catch(e){}
+      scheduleSync(currentId, false); // autosynk (om PIN finns)
+    } else {
+      try{ localStorage.removeItem(KEY_CURRENT); }catch(e){}
+    }
   }
 
   function setCurrent(id){ currentId = id; saveAll(); render(); }
@@ -141,7 +204,8 @@
         boards: Math.max(1, Math.min(12, +settings.boards || 1))
       },
       people: [],
-      activeId: null
+      activeId: null,
+      _lastSync: 0
     };
     currentId = id;
     saveAll();
@@ -191,7 +255,8 @@
       + '  <div><label>Antal poängtavlor</label><input id="boards" type="number" min="1" max="12" value="1"></div>'
       + '  <div class="right"><label>&nbsp;</label><button id="startBtn">Starta tävling</button></div>'
       + '</div>'
-      + '<div class="small">Tips: ID skapas automatiskt av namn + datum. Du kan ha flera tävlingar samtidigt.</div>';
+      + '<div class="small">Tips: ID skapas automatiskt av namn + datum. Du kan ha flera tävlingar samtidigt.</div>'
+      + (getPin() ? '<div class="note"><span class="ok">Autosynk aktiv</span> – ändringar sparas till server.</div>' : '');
     qs('#startBtn', pNew).onclick = function(){
       var settings = {
         name:  qs('#evName',pNew).value.trim(),
@@ -230,10 +295,20 @@
         + '</div>';
       ol.appendChild(c);
     });
+    // Öppna
     qsa('button[data-open]', pOpen).forEach(function(b){ b.onclick = function(){ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; }; });
+    // Stäng (+ säker synk)
     qsa('button[data-close]', pOpen).forEach(function(b){ b.onclick = function(){
       var id = b.getAttribute('data-close');
-      events[id].status='closed'; saveAll(); render();
+      // fråga ev. efter PIN om ingen finns
+      if (!getPin()){
+        var entered = window.prompt('Ange Admin-PIN för att spara tävlingen till servern (valfritt). Lämna tomt för att bara stänga lokalt:');
+        if (entered && entered.trim()){ setPin(entered.trim()); }
+      }
+      events[id].status='closed'; saveAll();
+      // force-immediate sync om vi har PIN
+      if (getPin()) scheduleSync(id, true);
+      render();
     }; });
     root.appendChild(pOpen);
 
@@ -300,7 +375,8 @@
       +   '</span></div>'
       +   '<div><label>Byt tävling</label><select id="switchEv"></select></div>'
       +   '<div class="right"><label>Status</label><div>' + (ev.status==='open' ? '<span class="status">pågående</span>' : '<span class="status">stängd</span>') + '</div></div>'
-      + '</div>';
+      + '</div>'
+      + (getPin() ? '<div class="note"><span class="ok">Autosynk aktiv</span> för denna enhet.</div>' : '');
     root.appendChild(head);
 
     var sw = qs('#switchEv', head);
@@ -349,7 +425,8 @@
       ev.activeId = p.id;
       nameInput.value=''; qs('#club',add).value=''; qs('#klass',add).value='';
       updateAddEnabled();
-      saveAll(); render();
+      saveAll(); // autosynk triggas
+      render();
     };
     root.appendChild(add);
 
@@ -458,7 +535,8 @@
         var nxt = ev.people[(i+1)%ev.people.length];
         ev.activeId = nxt.id; sel.value = nxt.id; setBadge();
       }
-      saveAll(); render();
+      saveAll(); // autosynk triggas
+      render();
     };
 
     // Resultatlista + EXPORT
@@ -559,8 +637,11 @@
 
   // ------- Init -------
   loadAll();
-  activeTab = 'Start'; // öppna alltid på Start
+  activeTab = 'Start';
   render();
+
+  // Säkerställ att sync körs även om sidan är öppen länge
+  setInterval(function(){ if (currentId && getPin()) scheduleSync(currentId, false); }, 15000);
 })();
 </script>
 </body>
