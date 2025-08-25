@@ -1,122 +1,90 @@
-// /api/event.js
-import { createClient } from '@supabase/supabase-js';
 
-const supa = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE, {
-  auth: { persistSession: false }
-});
+"use strict";
 
-export default async function handler(req, res) {
-  const { id } = req.query;
-  if (!id) return res.status(400).json({ error: 'Missing id' });
+module.exports = async (req, res) => {
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE);
 
-  // Enkelt skydd: kräver ADMIN_TOKEN för skrivningar
-  if (req.method === 'POST') {
-    const token = req.headers['x-admin-token'] || req.headers['X-Admin-Token'];
-    if (!token || token !== process.env.ADMIN_TOKEN) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  }
+    if (req.method === "GET") {
+      const id = (req.query.id || "").toString();
+      if (!id) {
+        // Lista events
+        const { data, error } = await client
+          .from("events")
+          .select("id, name, date, place")
+          .order('date', { ascending: false });
+        if (error) throw error;
+        return res.json({ events: data||[] });
+      }
+      // Hämta event + people
+      const { data: evt, error: e1 } = await client
+        .from("events")
+        .select("id, name, date, place, pen_p, pen_h, pen_g")
+        .eq("id", id)
+        .single();
 
-  if (req.method === 'GET') {
-    try {
-      const { data: ev, error: e1 } = await supa
-        .from('events').select('*').eq('event_id', id).single();
-      // e1.code === 'PGRST116' = no rows; det är ok
-      if (e1 && e1.code !== 'PGRST116') throw e1;
+      if (e1 && e1.code !== "PGRST116") throw e1; // ignorera not found
 
-      const { data: parts, error: e2 } = await supa
-        .from('participants').select('*').eq('event_id', id).order('name');
+      const { data: ppl, error: e2 } = await client
+        .from("people")
+        .select("external_id, name, club, klass, laps")
+        .eq("event_id", id);
+
       if (e2) throw e2;
 
-      const { data: laps, error: e3 } = await supa
-        .from('laps').select('*').eq('event_id', id).order('lap_index');
-      if (e3) throw e3;
-
-      const map = {};
-      (parts || []).forEach(p => {
-        map[p.external_id] = {
-          external_id: p.external_id,
-          name: p.name,
-          club: p.club,
-          klass: p.class,
-          laps: []
-        };
-      });
-      (laps || []).forEach(r => {
-        const t = map[r.external_id];
-        if (!t) return;
-        t.laps.push({
-          tP: +r.t_p || 0, mP: +r.m_p || 0,
-          tH: +r.t_h || 0, mH: +r.m_h || 0,
-          tG: +r.t_g || 0, mG: +r.m_g || 0,
-          pt: +r.pt  || 0
-        });
-      });
-
-      return res.status(200).json({ event: ev || null, people: Object.values(map) });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Server error' });
+      return res.json({ event: evt || null, people: ppl || [] });
     }
-  }
 
-  if (req.method === 'POST') {
-    try {
+    if (req.method === "POST") {
+      const admin = req.headers["x-admin-token"]; // måste matcha Vercel env ADMIN_TOKEN
+      if (!admin || admin !== process.env.ADMIN_TOKEN) return res.status(401).json({ error: "Unauthorized" });
+
+      const id = (req.query.id || "").toString();
+      if (!id) return res.status(400).json({ error: "Missing id" });
+
       const body = req.body || {};
-      const ev = body.event || {};
-      const people = Array.isArray(body.people) ? body.people : [];
 
-      // upsert event
-      const row = {
-        event_id: id,
+      const ev = body.event || {};
+      const upEvent = {
+        id,
         name: ev.name || null,
         date: ev.date || null,
         place: ev.place || null,
-        pen_p: +ev.penP || 0,
-        pen_h: +ev.penH || 0,
-        pen_g: +ev.penG || 0
+        pen_p: ev.penP ?? ev.pen_p ?? 5,
+        pen_h: ev.penH ?? ev.pen_h ?? 5,
+        pen_g: ev.penG ?? ev.pen_g ?? 5
       };
-      const { error: u1 } = await supa.from('events').upsert(row, { onConflict: 'event_id' });
-      if (u1) throw u1;
 
-      // upsert participants
-      const partRows = people.map(p => ({
+      // Upsert event
+      let { error: eUp } = await client.from("events").upsert(upEvent);
+      if (eUp) throw eUp;
+
+      // Replace people (enkel modell)
+      const people = (body.people || []).map(p => ({
         event_id: id,
         external_id: p.id,
         name: p.name,
-        club: p.club || '',
-        class: p.klass || ''
+        club: p.club || null,
+        klass: p.klass || null,
+        laps: p.laps || []
       }));
-      if (partRows.length) {
-        const { error: u2 } = await supa
-          .from('participants').upsert(partRows, { onConflict: 'event_id,external_id' });
-        if (u2) throw u2;
+
+      let { error: eDel } = await client.from("people").delete().eq("event_id", id);
+      if (eDel) throw eDel;
+      if (people.length){
+        let { error: eIns } = await client.from("people").insert(people);
+        if (eIns) throw eIns;
       }
 
-      // replace laps
-      const { error: d1 } = await supa.from('laps').delete().eq('event_id', id);
-      if (d1) throw d1;
-
-      const allLaps = [];
-      people.forEach(p => (p.laps || []).forEach((v, idx) => {
-        allLaps.push({
-          event_id: id, external_id: p.id, lap_index: idx + 1,
-          t_p: +v.tP || 0, m_p: +v.mP || 0,
-          t_h: +v.tH || 0, m_h: +v.mH || 0,
-          t_g: +v.tG || 0, m_g: +v.mG || 0,
-          pt: +v.pt  || 0
-        });
-      }));
-      if (allLaps.length) {
-        const { error: i1 } = await supa.from('laps').insert(allLaps);
-        if (i1) throw i1;
-      }
-      return res.status(200).json({ ok: true });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Server error' });
+      return res.json({ ok: true });
     }
-  }
 
-  return res.status(405).json({ error: 'Method not allowed' });
-}
+    res.setHeader("Allow", "GET, POST");
+    return res.status(405).end("Method Not Allowed");
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Server error", details: String(err && err.message || err) });
+  }
+};
+```
