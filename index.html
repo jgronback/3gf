@@ -42,63 +42,75 @@
 <script>
 (function(){
   // ------- Helpers -------
-  const $  = (id, el=document) => el.getElementById(id);
-  const qs = (sel, el=document) => el.querySelector(sel);
-  const qsa= (sel, el=document) => Array.from(el.querySelectorAll(sel));
+  function $(id, el){ return (el||document).getElementById(id); }
+  function qs(sel, el){ return (el||document).querySelector(sel); }
+  function qsa(sel, el){ return Array.prototype.slice.call((el||document).querySelectorAll(sel)); }
 
-  const KEY_EVENTS  = '3gf_events';
-  const KEY_CURRENT = '3gf_current_event';
-  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-  const todayISO = () => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,'0');
-    const da= String(d.getDate()).padStart(2,'0');
-    return `${y}-${m}-${da}`;
-  };
-  const slugify = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  var KEY_EVENTS  = '3gf_events';
+  var KEY_CURRENT = '3gf_current_event';
+  function uid(){ return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).slice(2); }
+  function todayISO(){
+    var d=new Date(); var y=d.getFullYear(); var m=('0'+(d.getMonth()+1)).slice(-2); var da=('0'+d.getDate()).slice(-2);
+    return y+'-'+m+'-'+da;
+  }
+  function slugify(s){
+    s = (s||'').toLowerCase();
+    s = s.replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+    return s || 'tavling';
+  }
 
   // ------- Data model -------
   // events = { id: { id, createdAt, status:'open'|'closed', settings:{name,date,place,penP,penH,penG,boards}, people:[{id,name,club,klass,laps:[]},..], activeId } }
-  let events = {};
-  let currentId = null;
+  var events = {};
+  var currentId = null;
+
+  function objectValues(obj){
+    var out=[], k;
+    for (k in obj){ if (Object.prototype.hasOwnProperty.call(obj,k)) out.push(obj[k]); }
+    return out;
+  }
 
   function loadAll(){
-    try { events = JSON.parse(localStorage.getItem(KEY_EVENTS)||'{}')||{}; } catch{ events={}; }
+    try { events = JSON.parse(localStorage.getItem(KEY_EVENTS)||'{}')||{}; } catch(e){ events={}; }
     currentId = localStorage.getItem(KEY_CURRENT) || null;
 
     // Auto-migration från gammal 3gf_state (en enda tävling)
     try{
-      const legacy = localStorage.getItem('3gf_state');
+      var legacy = localStorage.getItem('3gf_state');
       if (legacy && Object.keys(events).length===0){
-        const s = JSON.parse(legacy);
-        const id = `import-${Date.now()}`;
+        var s = JSON.parse(legacy);
+        var id = 'import-'+Date.now();
         events[id] = {
-          id,
+          id: id,
           createdAt: new Date().toISOString(),
           status: 'open',
-          settings: s.settings || { penP:5, penH:5, penG:5, boards:3, name:'', date:'', place:'' },
-          people: (s.people||[]).map(p=>({ id: p.id || uid(), name:p.name||'', club:p.club||'', klass:p.klass||'', laps:p.laps||[] })),
-          activeId: s.activeId || (s.people&&s.people[0]?.id) || null
+          settings: s && s.settings ? s.settings : { penP:5, penH:5, penG:5, boards:3, name:'', date:'', place:'' },
+          people: (s && s.people ? s.people : []).map(function(p){
+            return { id: (p && p.id) || uid(), name:(p && p.name)||'', club:(p && p.club)||'', klass:(p && p.klass)||'', laps:(p && p.laps)||[] };
+          }),
+          activeId: (s && s.activeId) || ((s && s.people && s.people[0] && s.people[0].id) || null)
         };
         currentId = id;
         localStorage.removeItem('3gf_state');
       }
-    }catch{}
+    }catch(e){}
 
     // Auto-close (datum passerat)
-    const today = todayISO();
-    let changed=false;
-    Object.values(events).forEach(ev=>{
-      const d = ev.settings?.date;
+    var today = todayISO();
+    var changed=false;
+    objectValues(events).forEach(function(ev){
+      var d = ev && ev.settings ? ev.settings.date : '';
       if (ev.status==='open' && d && d < today){ ev.status='closed'; changed=true; }
     });
     if (changed) saveAll();
 
     // Säkerställ currentId pekar på en befintlig tävling
     if (!currentId || !events[currentId]) {
-      const ids = Object.keys(events);
-      currentId = ids.length ? ids.sort((a,b)=> (events[b].createdAt||'').localeCompare(events[a].createdAt||''))[0] : null;
+      var ids = Object.keys(events);
+      currentId = ids.length ? ids.sort(function(a,b){
+        var A = (events[b] && events[b].createdAt) || ''; var B = (events[a] && events[a].createdAt) || '';
+        return A.localeCompare(B);
+      })[0] : null;
     }
   }
   function saveAll(){
@@ -106,18 +118,17 @@
     if (currentId) localStorage.setItem(KEY_CURRENT, currentId); else localStorage.removeItem(KEY_CURRENT);
   }
 
-  const setCurrent = id => { currentId = id; saveAll(); render(); };
-  const getCurrent = () => currentId ? events[currentId] : null;
+  function setCurrent(id){ currentId = id; saveAll(); render(); }
+  function getCurrent(){ return currentId ? events[currentId] : null; }
 
   function createEvent(settings){
-    const date = (settings.date||'').trim();
-    const base = slugify(settings.name||'tavling');
-    let id = `${base}${date?'-'+date:''}`;
-    // unik id
-    let i=1;
-    while (events[id]) { id = `${base}${date?'-'+date:''}-${++i}`; }
+    var date = (settings.date||'').trim();
+    var base = slugify(settings.name||'tavling');
+    var id = base + (date?('-'+date):'');
+    var i=1;
+    while (events[id]) { id = base + (date?('-'+date):'') + '-' + (++i); }
     events[id] = {
-      id,
+      id: id,
       createdAt: new Date().toISOString(),
       status: 'open',
       settings: {
@@ -137,49 +148,52 @@
     return id;
   }
 
-  function labelPerson(p, idx){ return p.name?.trim() ? `${p.name}${p.klass?.trim()?` (${p.klass})`:''}` : `Deltagare ${idx+1}`; }
+  function labelPerson(p, idx){
+    var hasName = p && p.name && p.name.trim();
+    var hasKlass = p && p.klass && p.klass.trim();
+    return hasName ? (p.name + (hasKlass ? (' ('+p.klass+')') : '')) : ('Deltagare ' + (idx+1));
+  }
 
   // ------- UI scaffolding -------
-  const tabs = ['Start','Tävling'];
-  let activeTab = 'Start';
+  var tabs = ['Start','Tävling'];
+  var activeTab = 'Start';
 
   function renderTabs(){
-    const el = $('tabs'); el.innerHTML='';
-    tabs.forEach(t=>{
-      const b = document.createElement('button');
+    var el = $('tabs'); el.innerHTML='';
+    tabs.forEach(function(t){
+      var b = document.createElement('button');
       b.className = 'tab' + (activeTab===t?' active':'');
       b.textContent = t;
-      b.onclick = ()=>{ activeTab=t; render(); };
+      b.onclick = function(){ activeTab=t; render(); };
       el.appendChild(b);
     });
   }
 
   // ------- START VIEW -------
   function viewStart(){
-    const root = document.createElement('div');
+    var root = document.createElement('div');
 
     // 1) Ny tävling
-    const pNew = document.createElement('div'); pNew.className='panel';
-    pNew.innerHTML = `
-      <h3>Ny tävling</h3>
-      <div class="row">
-        <div><label>Namn (valfritt)</label><input id="evName"></div>
-        <div><label>Datum</label><input id="evDate" type="date"></div>
-        <div><label>Plats (valfritt)</label><input id="evPlace"></div>
-      </div>
-      <div class="row">
-        <div><label>Straff Pistol (s/miss)</label><input id="penP" type="number" step="0.01" value="5"></div>
-        <div><label>Straff Hagel (s/miss)</label><input id="penH" type="number" step="0.01" value="5"></div>
-        <div><label>Straff Karbin (s/miss)</label><input id="penG" type="number" step="0.01" value="5"></div>
-      </div>
-      <div class="row">
-        <div><label>Antal poängtavlor</label><input id="boards" type="number" min="1" max="12" value="3"></div>
-        <div class="right"><label>&nbsp;</label><button id="startBtn">Starta tävling</button></div>
-      </div>
-      <div class="small">Tips: ID skapas automatiskt av namn + datum. Du kan ha flera tävlingar samtidigt.</div>
-    `;
-    pNew.querySelector('#startBtn').onclick = ()=>{
-      const settings = {
+    var pNew = document.createElement('div'); pNew.className='panel';
+    pNew.innerHTML = ''
+      + '<h3>Ny tävling</h3>'
+      + '<div class="row">'
+      + '  <div><label>Namn (valfritt)</label><input id="evName"></div>'
+      + '  <div><label>Datum</label><input id="evDate" type="date"></div>'
+      + '  <div><label>Plats (valfritt)</label><input id="evPlace"></div>'
+      + '</div>'
+      + '<div class="row">'
+      + '  <div><label>Straff Pistol (s/miss)</label><input id="penP" type="number" step="0.01" value="5"></div>'
+      + '  <div><label>Straff Hagel (s/miss)</label><input id="penH" type="number" step="0.01" value="5"></div>'
+      + '  <div><label>Straff Karbin (s/miss)</label><input id="penG" type="number" step="0.01" value="5"></div>'
+      + '</div>'
+      + '<div class="row">'
+      + '  <div><label>Antal poängtavlor</label><input id="boards" type="number" min="1" max="12" value="3"></div>'
+      + '  <div class="right"><label>&nbsp;</label><button id="startBtn">Starta tävling</button></div>'
+      + '</div>'
+      + '<div class="small">Tips: ID skapas automatiskt av namn + datum. Du kan ha flera tävlingar samtidigt.</div>';
+    qs('#startBtn', pNew).onclick = function(){
+      var settings = {
         name:  qs('#evName',pNew).value.trim(),
         date:  qs('#evDate',pNew).value.trim(),
         place: qs('#evPlace',pNew).value.trim(),
@@ -195,55 +209,57 @@
     root.appendChild(pNew);
 
     // 2) Lista tävlingar
-    const open = Object.values(events).filter(e=>e.status==='open');
-    const closed = Object.values(events).filter(e=>e.status==='closed');
+    var all = objectValues(events);
+    var open = all.filter(function(e){ return e.status==='open'; });
+    var closed = all.filter(function(e){ return e.status==='closed'; });
 
-    const pOpen = document.createElement('div'); pOpen.className='panel';
-    pOpen.innerHTML = `<h3>Pågående tävlingar</h3><div class="list" id="openList"></div>`;
-    const ol = qs('#openList',pOpen);
-    if (!open.length){ ol.innerHTML = `<div class="small">Inga pågående.</div>`; }
-    open.sort((a,b)=> (a.settings.date||'').localeCompare(b.settings.date||''));
-    open.forEach(ev=>{
-      const c = document.createElement('div'); c.className='card';
-      c.innerHTML = `
-        <div><b>${ev.settings.name||'(namnlös)'}</b> <span class="small">– ${ev.settings.date||'-'} ${ev.settings.place||''}</span></div>
-        <div class="small">Deltagare: ${ev.people.length}</div>
-        <div class="controls">
-          <button data-open="${ev.id}">Öppna</button>
-          <button data-close="${ev.id}">Stäng</button>
-        </div>
-      `;
+    var pOpen = document.createElement('div'); pOpen.className='panel';
+    pOpen.innerHTML = '<h3>Pågående tävlingar</h3><div class="list" id="openList"></div>';
+    var ol = qs('#openList',pOpen);
+    if (!open.length){ ol.innerHTML = '<div class="small">Inga pågående.</div>'; }
+    open.sort(function(a,b){ return (a.settings && a.settings.date || '').localeCompare(b.settings && b.settings.date || ''); });
+    open.forEach(function(ev){
+      var c = document.createElement('div'); c.className='card';
+      c.innerHTML = ''
+        + '<div><b>' + (ev.settings && ev.settings.name || '(namnlös)') + '</b> '
+        + '<span class="small">– ' + (ev.settings && ev.settings.date || '-') + ' ' + (ev.settings && ev.settings.place || '') + '</span></div>'
+        + '<div class="small">Deltagare: ' + (ev.people ? ev.people.length : 0) + '</div>'
+        + '<div class="controls">'
+        + '  <button data-open="'+ev.id+'">Öppna</button>'
+        + '  <button data-close="'+ev.id+'">Stäng</button>'
+        + '</div>';
       ol.appendChild(c);
     });
-    qsa('button[data-open]', pOpen).forEach(b=> b.onclick = ()=>{ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; });
-    qsa('button[data-close]', pOpen).forEach(b=> b.onclick = ()=>{
-      const id = b.getAttribute('data-close');
+    qsa('button[data-open]', pOpen).forEach(function(b){ b.onclick = function(){ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; }; });
+    qsa('button[data-close]', pOpen).forEach(function(b){ b.onclick = function(){
+      var id = b.getAttribute('data-close');
       events[id].status='closed'; saveAll(); render();
-    });
+    }; });
     root.appendChild(pOpen);
 
-    const pClosed = document.createElement('div'); pClosed.className='panel';
-    pClosed.innerHTML = `<h3>Avslutade tävlingar</h3><div class="list" id="closedList"></div>`;
-    const cl = qs('#closedList',pClosed);
-    if (!closed.length){ cl.innerHTML = `<div class="small">Inga avslutade.</div>`; }
-    closed.sort((a,b)=> (b.settings.date||'').localeCompare(a.settings.date||''));
-    closed.forEach(ev=>{
-      const c = document.createElement('div'); c.className='card';
-      c.innerHTML = `
-        <div><b>${ev.settings.name||'(namnlös)'}</b> <span class="small">– ${ev.settings.date||'-'} ${ev.settings.place||''}</span> <span class="status">stängd</span></div>
-        <div class="small">Deltagare: ${ev.people.length}</div>
-        <div class="controls">
-          <button data-open="${ev.id}">Öppna</button>
-          <button data-reopen="${ev.id}">Återöppna</button>
-        </div>
-      `;
+    var pClosed = document.createElement('div'); pClosed.className='panel';
+    pClosed.innerHTML = '<h3>Avslutade tävlingar</h3><div class="list" id="closedList"></div>';
+    var cl = qs('#closedList',pClosed);
+    if (!closed.length){ cl.innerHTML = '<div class="small">Inga avslutade.</div>'; }
+    closed.sort(function(a,b){ return (b.settings && b.settings.date || '').localeCompare(a.settings && a.settings.date || ''); });
+    closed.forEach(function(ev){
+      var c = document.createElement('div'); c.className='card';
+      c.innerHTML = ''
+        + '<div><b>' + (ev.settings && ev.settings.name || '(namnlös)') + '</b> '
+        + '<span class="small">– ' + (ev.settings && ev.settings.date || '-') + ' ' + (ev.settings && ev.settings.place || '') + '</span> '
+        + '<span class="status">stängd</span></div>'
+        + '<div class="small">Deltagare: ' + (ev.people ? ev.people.length : 0) + '</div>'
+        + '<div class="controls">'
+        + '  <button data-open="'+ev.id+'">Öppna</button>'
+        + '  <button data-reopen="'+ev.id+'">Återöppna</button>'
+        + '</div>';
       cl.appendChild(c);
     });
-    qsa('button[data-open]', pClosed).forEach(b=> b.onclick = ()=>{ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; });
-    qsa('button[data-reopen]', pClosed).forEach(b=> b.onclick = ()=>{
-      const id = b.getAttribute('data-reopen');
+    qsa('button[data-open]', pClosed).forEach(function(b){ b.onclick = function(){ setCurrent(b.getAttribute('data-open')); activeTab='Tävling'; }; });
+    qsa('button[data-reopen]', pClosed).forEach(function(b){ b.onclick = function(){
+      var id = b.getAttribute('data-reopen');
       events[id].status='open'; saveAll(); render();
-    });
+    }; });
     root.appendChild(pClosed);
 
     return root;
@@ -251,78 +267,85 @@
 
   // ------- Tävlingsvy (per tävling) -------
   function summarize(ev){
-    const {penP,penH,penG} = ev.settings;
-    return ev.people.map((p,i)=>{
-      let base=0, miss=0, laps=0;
-      (p.laps||[]).forEach(v=>{
-        base += (v.tP||0)+(v.tH||0)+(v.tG||0)+(v.pt||0);
-        miss += (v.mP||0)*penP + (v.mH||0)*penH + (v.mG||0)*penG;
+    var penP = ev.settings ? ev.settings.penP : 0;
+    var penH = ev.settings ? ev.settings.penH : 0;
+    var penG = ev.settings ? ev.settings.penG : 0;
+    return (ev.people||[]).map(function(p,i){
+      var base=0, miss=0, laps=0;
+      (p.laps||[]).forEach(function(v){
+        base += (+v.tP||0)+(+v.tH||0)+(+v.tG||0)+(+v.pt||0);
+        miss += (+v.mP||0)*penP + (+v.mH||0)*penH + (+v.mG||0)*penG;
         laps++;
       });
-      return { name: labelPerson(p,i), club:p.club||'', klass:p.klass||'', laps, base, penalty: miss, total: base+miss };
-    }).sort((a,b)=>a.total-b.total);
+      return { name: labelPerson(p,i), club: p.club||'', klass:p.klass||'', laps:laps, base:base, penalty:miss, total: base+miss };
+    }).sort(function(a,b){ return a.total-b.total; });
   }
 
   function viewRace(){
-    const ev = getCurrent();
-    const root = document.createElement('div');
+    var ev = getCurrent();
+    var root = document.createElement('div');
     if (!ev){
-      const p = document.createElement('div'); p.className='panel';
-      p.innerHTML = `<p>Ingen tävling vald. Gå till fliken <b>Start</b> och välj eller skapa en tävling.</p>`;
+      var p = document.createElement('div'); p.className='panel';
+      p.innerHTML = '<p>Ingen tävling vald. Gå till fliken <b>Start</b> och välj eller skapa en tävling.</p>';
       root.appendChild(p);
       return root;
     }
 
     // Header/status
-    const head = document.createElement('div'); head.className = 'panel';
-    head.innerHTML = `
-      <div class="row">
-        <div><b>${ev.settings.name||'(namnlös)'}</b><br><span class="small">${ev.settings.date||'-'} ${ev.settings.place||''}</span></div>
-        <div><label>Byt tävling</label><select id="switchEv"></select></div>
-        <div class="right"><label>Status</label><div>${ev.status==='open' ? '<span class="status">pågående</span>' : '<span class="status">stängd</span>'}</div></div>
-      </div>
-    `;
+    var head = document.createElement('div'); head.className = 'panel';
+    head.innerHTML = ''
+      + '<div class="row">'
+      +   '<div><b>' + ((ev.settings && ev.settings.name) || '(namnlös)') + '</b><br><span class="small">'
+      +   ((ev.settings && ev.settings.date) || '-') + ' ' + ((ev.settings && ev.settings.place) || '')
+      +   '</span></div>'
+      +   '<div><label>Byt tävling</label><select id="switchEv"></select></div>'
+      +   '<div class="right"><label>Status</label><div>' + (ev.status==='open' ? '<span class="status">pågående</span>' : '<span class="status">stängd</span>') + '</div></div>'
+      + '</div>';
     root.appendChild(head);
 
-    const sw = qs('#switchEv', head);
+    var sw = qs('#switchEv', head);
     sw.innerHTML='';
-    Object.values(events).sort((a,b)=> (a.settings.date||'').localeCompare(b.settings.date||'')).forEach(E=>{
-      const o = document.createElement('option');
-      o.value = E.id; o.textContent = `${E.settings.date||'-'} – ${E.settings.name||'(namnlös)'}`;
+    Object.keys(events).sort(function(a,b){
+      var A=(events[a] && events[a].settings && events[a].settings.date)||'';
+      var B=(events[b] && events[b].settings && events[b].settings.date)||'';
+      return A.localeCompare(B);
+    }).forEach(function(id){
+      var E = events[id];
+      var o = document.createElement('option');
+      o.value = E.id; o.textContent = ((E.settings && E.settings.date)||'-') + ' – ' + ((E.settings && E.settings.name) || '(namnlös)');
       sw.appendChild(o);
     });
     sw.value = ev.id;
-    sw.onchange = ()=> setCurrent(sw.value);
+    sw.onchange = function(){ setCurrent(sw.value); };
 
     // Lägg till deltagare (namn krävs + live-disable)
-    const add = document.createElement('div'); add.className='panel';
-    add.innerHTML = `
-      <h3>Lägg till deltagare</h3>
-      <div class="row">
-        <div><label>Namn</label><input id="name" /></div>
-        <div><label>Klubb</label><input id="club" /></div>
-        <div><label>Klass</label><input id="klass" /></div>
-      </div>
-      <div class="controls">
-        <button id="addParticipant"${ev.status!=='open'?' disabled':''}>Lägg till</button>
-      </div>
-      <div class="small">Namn är obligatoriskt.</div>
-    `;
-    const nameInput = qs('#name', add);
-    const btnAdd = qs('#addParticipant', add);
+    var add = document.createElement('div'); add.className='panel';
+    add.innerHTML = ''
+      + '<h3>Lägg till deltagare</h3>'
+      + '<div class="row">'
+      + '  <div><label>Namn</label><input id="name" /></div>'
+      + '  <div><label>Klubb</label><input id="club" /></div>'
+      + '  <div><label>Klass</label><input id="klass" /></div>'
+      + '</div>'
+      + '<div class="controls">'
+      + '  <button id="addParticipant"' + (ev.status!=='open'?' disabled':'') + '>Lägg till</button>'
+      + '</div>'
+      + '<div class="small">Namn är obligatoriskt.</div>';
+    var nameInput = qs('#name', add);
+    var btnAdd = qs('#addParticipant', add);
     function updateAddEnabled(){
       btnAdd.disabled = (ev.status!=='open') || nameInput.value.trim().length===0;
     }
     nameInput.addEventListener('input', updateAddEnabled);
     updateAddEnabled();
 
-    btnAdd.onclick = ()=>{
-      const name = nameInput.value.trim();
+    btnAdd.onclick = function(){
+      var name = nameInput.value.trim();
       if (!name){ alert('Ange namn för att lägga till deltagare.'); return; }
-      const club = qs('#club',add).value.trim();
-      const klass= qs('#klass',add).value.trim();
-      const p = { id: uid(), name, club, klass, laps:[] };
-      ev.people = [...ev.people, p];
+      var club = qs('#club',add).value.trim();
+      var klass= qs('#klass',add).value.trim();
+      var p = { id: uid(), name: name, club: club, klass: klass, laps:[] };
+      ev.people = (ev.people||[]).concat([p]);
       ev.activeId = p.id;
       nameInput.value=''; qs('#club',add).value=''; qs('#klass',add).value='';
       updateAddEnabled();
@@ -331,67 +354,65 @@
     root.appendChild(add);
 
     // Aktiv deltagare + varvformulär
-    const pane = document.createElement('div'); pane.className='panel';
-    pane.innerHTML = `
-      <label>Aktiv deltagare</label>
-      <select id="activeSel"></select>
-      <div id="activeBadge" class="active-badge">Ingen vald</div>
+    var pane = document.createElement('div'); pane.className='panel';
+    pane.innerHTML = ''
+      + '<label>Aktiv deltagare</label>'
+      + '<select id="activeSel"></select>'
+      + '<div id="activeBadge" class="active-badge">Ingen vald</div>'
 
-      <div class="row">
-        <div class="time"><div><label>Pistol tid</label><input id="tP" type="number" step="0.01"></div></div>
-        <div class="miss"><div><label>Miss P</label><input id="mP" type="number" min="0" step="1"></div></div>
-      </div>
-      <div class="row">
-        <div class="time"><div><label>Hagel tid</label><input id="tH" type="number" step="0.01"></div></div>
-        <div class="miss"><div><label>Miss H</label><input id="mH" type="number" min="0" step="1"></div></div>
-      </div>
-      <div class="row">
-        <div class="time"><div><label>Karbin tid</label><input id="tG" type="number" step="0.01"></div></div>
-        <div class="miss"><div><label>Miss K</label><input id="mG" type="number" min="0" step="1"></div></div>
-      </div>
-      <div class="row">
-        <div><label>PT detta varv</label><input id="ptLap" type="number" step="0.01"></div>
-      </div>
+      + '<div class="row">'
+      + '  <div class="time"><div><label>Pistol tid</label><input id="tP" type="number" step="0.01"></div></div>'
+      + '  <div class="miss"><div><label>Miss P</label><input id="mP" type="number" min="0" step="1"></div></div>'
+      + '</div>'
+      + '<div class="row">'
+      + '  <div class="time"><div><label>Hagel tid</label><input id="tH" type="number" step="0.01"></div></div>'
+      + '  <div class="miss"><div><label>Miss H</label><input id="mH" type="number" min="0" step="1"></div></div>'
+      + '</div>'
+      + '<div class="row">'
+      + '  <div class="time"><div><label>Karbin tid</label><input id="tG" type="number" step="0.01"></div></div>'
+      + '  <div class="miss"><div><label>Miss K</label><input id="mG" type="number" min="0" step="1"></div></div>'
+      + '</div>'
+      + '<div class="row">'
+      + '  <div><label>PT detta varv</label><input id="ptLap" type="number" step="0.01"></div>'
+      + '</div>'
 
-      <div class="controls">
-        <button id="saveLap"${ev.status!=='open'?' disabled':''}>Spara varv</button>
-        <button id="removeActive">Ta bort vald</button>
-      </div>
-      <div class="small">“Spara varv” är <span class="accent">inaktiv</span> tills du fyllt i minst ett värde.</div>
-    `;
+      + '<div class="controls">'
+      + '  <button id="saveLap"' + (ev.status!=='open'?' disabled':'') + '>Spara varv</button>'
+      + '  <button id="removeActive">Ta bort vald</button>'
+      + '</div>'
+      + '<div class="small">“Spara varv” är <span class="accent">inaktiv</span> tills du fyllt i minst ett värde.</div>';
     root.appendChild(pane);
 
     // Fyll select
-    const sel = qs('#activeSel',pane);
+    var sel = qs('#activeSel',pane);
     sel.innerHTML='';
-    ev.people.forEach((p,i)=>{
-      const o=document.createElement('option');
+    (ev.people||[]).forEach(function(p,i){
+      var o=document.createElement('option');
       o.value=p.id; o.textContent=labelPerson(p,i);
       sel.appendChild(o);
     });
-    if (ev.activeId && ev.people.find(p=>p.id===ev.activeId)) sel.value=ev.activeId;
+    if (ev.activeId && (ev.people||[]).some(function(p){ return p.id===ev.activeId; })) sel.value=ev.activeId;
 
-    const badge = qs('#activeBadge',pane);
-    const setBadge=()=>{
-      const p=ev.people.find(x=>x.id===sel.value);
-      const idx = ev.people.findIndex(x=>x?.id===sel.value);
+    var badge = qs('#activeBadge',pane);
+    function setBadge(){
+      var p=null, idx=-1;
+      (ev.people||[]).forEach(function(x,i){ if (x && x.id===sel.value){ p=x; idx=i; } });
       badge.textContent = p ? (p.name || labelPerson(p, idx)) : 'Ingen vald';
-    };
+    }
     setBadge();
-    sel.onchange=()=>{ ev.activeId=sel.value||null; saveAll(); setBadge(); };
+    sel.onchange=function(){ ev.activeId=sel.value||null; saveAll(); setBadge(); };
 
     // Ta bort vald (med bekräftelse)
-    qs('#removeActive',pane).onclick = ()=>{
-      const id = sel.value;
+    qs('#removeActive',pane).onclick = function(){
+      var id = sel.value;
       if (!id) return;
-      const p = ev.people.find(x=>x.id===id);
-      const namn = p?.name?.trim() || 'den valda deltagaren';
-      if (!confirm(`Ta bort ${namn}? Detta går inte att ångra.`)) return;
+      var found=null, i=-1;
+      (ev.people||[]).forEach(function(x,ix){ if (x && x.id===id){ found=x; i=ix; }});
+      var namn = (found && found.name && found.name.trim()) || 'den valda deltagaren';
+      if (!confirm('Ta bort ' + namn + '? Detta går inte att ångra.')) return;
 
-      const i = ev.people.findIndex(x=>x.id===id);
-      if (i<0) return;
-      ev.people = ev.people.filter(x=>x.id!==id);
-      if (ev.people.length){
+      ev.people = (ev.people||[]).filter(function(x){ return x.id!==id; });
+      if ((ev.people||[]).length){
         ev.activeId = ev.people[Math.min(i, ev.people.length-1)].id;
       } else {
         ev.activeId = null;
@@ -400,116 +421,147 @@
     };
 
     // --- Live-validering för “Spara varv” ---
-    const btnSave = qs('#saveLap',pane);
+    var btnSave = qs('#saveLap',pane);
     function readLapVals(){
       return {
-        tP:+qs('#tP',pane).value||0, mP:+qs('#mP',pane).value||0,
-        tH:+qs('#tH',pane).value||0, mH:+qs('#mH',pane).value||0,
-        tG:+qs('#tG',pane).value||0, mG:+qs('#mG',pane).value||0,
-        pt:+qs('#ptLap',pane).value||0
+        tP:+(qs('#tP',pane).value||0), mP:+(qs('#mP',pane).value||0),
+        tH:+(qs('#tH',pane).value||0), mH:+(qs('#mH',pane).value||0),
+        tG:+(qs('#tG',pane).value||0), mG:+(qs('#mG',pane).value||0),
+        pt:+(qs('#ptLap',pane).value||0)
       };
     }
-    function anyFilled(v){ return Object.values(v).some(n => n !== 0); }
+    function anyFilled(v){ for (var k in v){ if (v[k]!==0) return true; } return false; }
     function updateSaveEnabled(){
       if (ev.status!=='open'){ btnSave.disabled = true; return; }
-      const v = readLapVals();
+      var v = readLapVals();
       btnSave.disabled = !anyFilled(v);
     }
-    ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(id=>{
-      const el = qs(id, pane); el.addEventListener('input', updateSaveEnabled);
+    ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(function(id){
+      var el = qs(id, pane); el.addEventListener('input', updateSaveEnabled);
     });
     updateSaveEnabled();
 
     // Spara varv
-    btnSave.onclick = ()=>{
-      const p = ev.people.find(x=>x.id===sel.value);
+    btnSave.onclick = function(){
+      var p=null, i=-1;
+      (ev.people||[]).forEach(function(x,ix){ if (x && x.id===sel.value){ p=x; i=ix; }});
       if (!p){ alert('Välj deltagare först.'); return; }
-      const v = readLapVals();
-      if (!anyFilled(v)){ return; } // extra skydd
+      var v = readLapVals();
+      if (!anyFilled(v)){ return; }
       v.dtH = Date.now();
-      p.laps = [...(p.laps||[]), v];
-      ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(id=>{ const el=qs(id, pane); if(el) el.value=''; });
+      p.laps = (p.laps||[]).concat([v]);
+      ['#tP','#mP','#tH','#mH','#tG','#mG','#ptLap'].forEach(function(id){
+        var el=qs(id, pane); if(el) el.value='';
+      });
       updateSaveEnabled();
-      if (ev.people.length>1){
-        const i = ev.people.findIndex(x=>x.id===p.id);
-        const nxt = ev.people[(i+1)%ev.people.length];
+      if ((ev.people||[]).length>1){
+        var nxt = ev.people[(i+1)%ev.people.length];
         ev.activeId = nxt.id; sel.value = nxt.id; setBadge();
       }
       saveAll(); render();
     };
 
     // Resultatlista + EXPORT
-    const resultsPanel = document.createElement('div'); resultsPanel.className='panel';
-    resultsPanel.innerHTML = `
-      <h3>Resultat</h3>
-      <div class="controls">
-        <button id="exportPretty">Exportera (snygg utskrift)</button>
-        <button id="exportCSV">Exportera CSV</button>
-      </div>
-      <div id="resultsContainer"></div>
-    `;
+    var resultsPanel = document.createElement('div'); resultsPanel.className='panel';
+    resultsPanel.innerHTML = ''
+      + '<h3>Resultat</h3>'
+      + '<div class="controls">'
+      + '  <button id="exportPretty">Exportera (snygg utskrift)</button>'
+      + '  <button id="exportCSV">Exportera CSV</button>'
+      + '</div>'
+      + '<div id="resultsContainer"></div>';
     root.appendChild(resultsPanel);
 
-    const cont = qs('#resultsContainer',resultsPanel);
-    const rows = summarize(ev);
-    const tbl = document.createElement('table');
-    tbl.innerHTML = `<thead><tr><th>Pl</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Total (s)</th></tr></thead><tbody></tbody>`;
-    const tb = qs('tbody',tbl);
-    rows.forEach((r,i)=>{
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${i+1}</td><td>${r.name}</td><td>${r.club}</td><td>${r.klass}</td><td class="num">${r.laps}</td><td class="num">${r.total.toFixed(2)}</td>`;
+    var cont = qs('#resultsContainer',resultsPanel);
+    var rows = summarize(ev);
+    var tbl = document.createElement('table');
+    tbl.innerHTML = '<thead><tr><th>Pl</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Total (s)</th></tr></thead><tbody></tbody>';
+    var tb = qs('tbody',tbl);
+    rows.forEach(function(r,i){
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td>'+(i+1)+'</td><td>'+r.name+'</td><td>'+r.club+'</td><td>'+r.klass+'</td><td class="num">'+r.laps+'</td><td class="num">'+r.total.toFixed(2)+'</td>';
       tb.appendChild(tr);
     });
     cont.innerHTML=''; cont.appendChild(tbl);
 
     // ---- Export: CSV ----
-    qs('#exportCSV',resultsPanel).onclick = ()=>{
+    qs('#exportCSV',resultsPanel).onclick = function(){
       if (!rows.length){ alert('Inget resultat att exportera.'); return; }
-      const header = ['Placering','Namn','Klubb','Klass','Varv','Bas (s)','Straff (s)','Total (s)'];
-      const csv = [header.join(',')].concat(
-        rows.map((r,i)=>[
-          i+1, r.name, r.club, r.klass, r.laps,
-          r.base.toFixed(2), r.penalty.toFixed(2), r.total.toFixed(2)
-        ].map(x=>`"${String(x).replace(/"/g,'""')}"`).join(','))
+      var header = ['Placering','Namn','Klubb','Klass','Varv','Bas (s)','Straff (s)','Total (s)'];
+      var csv = [header.join(',')].concat(
+        rows.map(function(r,i){
+          var arr=[i+1, r.name, r.club, r.klass, r.laps, r.base.toFixed(2), r.penalty.toFixed(2), r.total.toFixed(2)];
+          return arr.map(function(x){ return '"'+String(x).replace(/"/g,'""')+'"'; }).join(',');
+        })
       ).join('\n');
-      const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`resultat_${ev.settings.date||'tavling'}.csv`; a.click();
+      var blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='resultat_'+((ev.settings && ev.settings.date)||'tavling')+'.csv'; a.click();
     };
 
     // ---- Export: Snygg utskrift ----
-    qs('#exportPretty',resultsPanel).onclick = ()=>{
+    qs('#exportPretty',resultsPanel).onclick = function(){
       if (!rows.length){ alert('Inget resultat att exportera.'); return; }
-      const w = window.open('','print','width=900,height=1100');
-      const css = `
-        body{ font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; margin:20px; color:#111; }
-        h1{ margin:0 0 6px; font-size:22px; }
-        .meta{ color:#555; margin-bottom:12px; }
-        table{ width:100%; border-collapse:collapse; }
-        th,td{ padding:8px 10px; border-bottom:1px solid #ddd; }
-        thead th{ background:#f5f7fb; text-align:left; }
-        td.num, th.num{ text-align:right; width:100px; }
-        tr:nth-child(even) td{ background:#fafafa; }
-        .footer{ margin-top:14px; color:#555; font-size:12px; }
-        @page{ size: A4 portrait; margin:15mm; }
-      `;
-      const header = `
-        <h1>${ev.settings.name || 'Resultat'}</h1>
-        <div class="meta">
-          Datum: ${ev.settings.date || '-'} &nbsp;•&nbsp; Plats: ${ev.settings.place || '-'}<br>
-          Straff (s/miss) – Pistol: ${ev.settings.penP||0}, Hagel: ${ev.settings.penH||0}, Karbin: ${ev.settings.penG||0}
-        </div>
-      `;
-      const rowsHtml = rows.map((r,i)=>`
-        <tr>
-          <td>${i+1}</td>
-          <td>${r.name}</td>
-          <td>${r.club}</td>
-          <td>${r.klass}</td>
-          <td class="num">${r.laps}</td>
-          <td class="num">${r.base.toFixed(2)}</td>
-          <td class="num">${r.penalty.toFixed(2)}</td>
-          <td class="num"><b>${r.total.toFixed(2)}</b></td>
-        </tr>
-      `).join('');
-      const html = `
-        <!doctype html><m
+      var w = window.open('','print','width=900,height=1100');
+      var css = ''
+        + 'body{ font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; margin:20px; color:#111; }'
+        + 'h1{ margin:0 0 6px; font-size:22px; }'
+        + '.meta{ color:#555; margin-bottom:12px; }'
+        + 'table{ width:100%; border-collapse:collapse; }'
+        + 'th,td{ padding:8px 10px; border-bottom:1px solid #ddd; }'
+        + 'thead th{ background:#f5f7fb; text-align:left; }'
+        + 'td.num, th.num{ text-align:right; width:100px; }'
+        + 'tr:nth-child(even) td{ background:#fafafa; }'
+        + '.footer{ margin-top:14px; color:#555; font-size:12px; }'
+        + '@page{ size: A4 portrait; margin:15mm; }';
+      var header = ''
+        + '<h1>' + ((ev.settings && ev.settings.name) || 'Resultat') + '</h1>'
+        + '<div class="meta">'
+        + 'Datum: ' + ((ev.settings && ev.settings.date) || '-') + ' &nbsp;•&nbsp; Plats: ' + ((ev.settings && ev.settings.place) || '-') + '<br>'
+        + 'Straff (s/miss) – Pistol: ' + (ev.settings ? ev.settings.penP||0 : 0) + ', Hagel: ' + (ev.settings ? ev.settings.penH||0 : 0) + ', Karbin: ' + (ev.settings ? ev.settings.penG||0 : 0)
+        + '</div>';
+      var rowsHtml = rows.map(function(r,i){
+        return ''
+          + '<tr>'
+          +   '<td>'+(i+1)+'</td>'
+          +   '<td>'+r.name+'</td>'
+          +   '<td>'+r.club+'</td>'
+          +   '<td>'+r.klass+'</td>'
+          +   '<td class="num">'+r.laps+'</td>'
+          +   '<td class="num">'+r.base.toFixed(2)+'</td>'
+          +   '<td class="num">'+r.penalty.toFixed(2)+'</td>'
+          +   '<td class="num"><b>'+r.total.toFixed(2)+'</b></td>'
+          + '</tr>';
+      }).join('');
+      var html = ''
+        + '<!doctype html><meta charset="utf-8"><title>Resultat</title>'
+        + '<style>'+css+'</style>'
+        + header
+        + '<table>'
+        + '  <thead><tr><th>Pl</th><th>Namn</th><th>Klubb</th><th>Klass</th><th class="num">Varv</th><th class="num">Bas (s)</th><th class="num">Straff (s)</th><th class="num">Total (s)</th></tr></thead>'
+        + '  <tbody>'+rowsHtml+'</tbody>'
+        + '</table>'
+        + '<div class="footer">Genererat: ' + (new Date().toLocaleString()) + ' • Poängtavlor: ' + ((ev.settings && ev.settings.boards) || 1) + '</div>';
+      w.document.write(html);
+      w.document.close();
+      setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 300);
+    };
+
+    return root;
+  }
+
+  // ------- Render root -------
+  function render(){
+    renderTabs();
+    var v=$('view'); v.innerHTML='';
+    if (activeTab==='Start') v.appendChild(viewStart());
+    if (activeTab==='Tävling') v.appendChild(viewRace());
+  }
+
+  // ------- Init -------
+  loadAll();
+  activeTab = 'Start'; // öppna alltid på Start
+  render();
+})();
+</script>
+</body>
+</html>
